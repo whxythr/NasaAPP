@@ -1,0 +1,27 @@
+{
+    "name": "SpaceSim.Editor",
+    "rootNamespace": "SpaceSim.Editor",
+    "references": [
+        "SpaceSim.Core",
+        "SpaceSim.Runtime",
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.unity.render-pipelines.universal",
+            "expression": "12.0.0",
+            "define": "SPACESIM_URP"
+        }
+    ],
+    "noEngineReferences": false
+}

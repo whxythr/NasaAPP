@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Type-checks SpaceSim.Runtime and the Unity-side tests against UnityEngineStubs.cs (no Unity install needed).
+    Compiles the legacy-input code path; #if SPACESIM_URP / Input System branches are NOT checked here.
+    This is a safety net, not a substitute for opening the project in Unity.
+      dotnet build Tools/UnityStubCheck
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <DefineConstants>ENABLE_LEGACY_INPUT_MANAGER;UNITY_INCLUDE_TESTS</DefineConstants>
+    <!-- CS0649: [SerializeField] fields are assigned by Unity's serializer. -->
+    <NoWarn>CS0618;CS0649</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="UnityEngineStubs.cs" />
+    <Compile Include="../../Assets/_Project/Scripts/Runtime/**/*.cs" />
+    <Compile Include="../../Assets/_Project/Tests/EditMode/Unity/**/*.cs" />
+    <Compile Include="../../Assets/_Project/Tests/PlayMode/**/*.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="NUnit" Version="3.14.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../CoreTests/SpaceSim.Core/SpaceSim.Core.csproj" />
+  </ItemGroup>
+</Project>

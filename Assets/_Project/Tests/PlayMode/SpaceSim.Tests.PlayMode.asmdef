@@ -1,0 +1,22 @@
+{
+    "name": "SpaceSim.Tests.PlayMode",
+    "rootNamespace": "SpaceSim.Tests",
+    "references": [
+        "SpaceSim.Core",
+        "SpaceSim.Runtime",
+        "UnityEngine.TestRunner"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,0 +1,13 @@
+C:\Users\bekan\Desktop\claude\NasaAPP\Tools\UnityStubCheck\obj\Debug\netstandard2.1\UnityStubCheck.csproj.AssemblyReference.cache
+C:\Users\bekan\Desktop\claude\NasaAPP\Tools\UnityStubCheck\obj\Debug\netstandard2.1\UnityStubCheck.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\bekan\Desktop\claude\NasaAPP\Tools\UnityStubCheck\obj\Debug\netstandard2.1\UnityStubCheck.AssemblyInfoInputs.cache
+C:\Users\bekan\Desktop\claude\NasaAPP\Tools\UnityStubCheck\obj\Debug\netstandard2.1\UnityStubCheck.AssemblyInfo.cs
+C:\Users\bekan\Desktop\claude\NasaAPP\Tools\UnityStubCheck\obj\Debug\netstandard2.1\UnityStubCheck.csproj.CoreCompileInputs.cache
+C:\Users\bekan\Desktop\claude\NasaAPP\Tools\UnityStubCheck\bin\Debug\netstandard2.1\UnityStubCheck.deps.json
+C:\Users\bekan\Desktop\claude\NasaAPP\Tools\UnityStubCheck\bin\Debug\netstandard2.1\UnityStubCheck.dll
+C:\Users\bekan\Desktop\claude\NasaAPP\Tools\UnityStubCheck\bin\Debug\netstandard2.1\UnityStubCheck.pdb
+C:\Users\bekan\Desktop\claude\NasaAPP\Tools\UnityStubCheck\bin\Debug\netstandard2.1\SpaceSim.Core.dll
+C:\Users\bekan\Desktop\claude\NasaAPP\Tools\UnityStubCheck\bin\Debug\netstandard2.1\SpaceSim.Core.pdb
+C:\Users\bekan\Desktop\claude\NasaAPP\Tools\UnityStubCheck\obj\Debug\netstandard2.1\UnityStu.31A94E84.Up2Date
+C:\Users\bekan\Desktop\claude\NasaAPP\Tools\UnityStubCheck\obj\Debug\netstandard2.1\UnityStubCheck.dll
+C:\Users\bekan\Desktop\claude\NasaAPP\Tools\UnityStubCheck\obj\Debug\netstandard2.1\UnityStubCheck.pdb

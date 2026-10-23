@@ -1,0 +1,134 @@
+{
+  "format": 1,
+  "restore": {
+    "C:\\Users\\bekan\\Desktop\\claude\\NasaAPP\\Tools\\UnityStubCheck\\UnityStubCheck.csproj": {}
+  },
+  "projects": {
+    "C:\\Users\\bekan\\Desktop\\claude\\NasaAPP\\Tools\\CoreTests\\SpaceSim.Core\\SpaceSim.Core.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Users\\bekan\\Desktop\\claude\\NasaAPP\\Tools\\CoreTests\\SpaceSim.Core\\SpaceSim.Core.csproj",
+        "projectName": "SpaceSim.Core",
+        "projectPath": "C:\\Users\\bekan\\Desktop\\claude\\NasaAPP\\Tools\\CoreTests\\SpaceSim.Core\\SpaceSim.Core.csproj",
+        "packagesPath": "C:\\Users\\bekan\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\bekan\\Desktop\\claude\\NasaAPP\\Tools\\CoreTests\\SpaceSim.Core\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\bekan\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "netstandard2.1"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "netstandard2.1": {
+            "targetAlias": "netstandard2.1",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "netstandard2.1": {
+          "targetAlias": "netstandard2.1",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "NETStandard.Library": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.426\\RuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "C:\\Users\\bekan\\Desktop\\claude\\NasaAPP\\Tools\\UnityStubCheck\\UnityStubCheck.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Users\\bekan\\Desktop\\claude\\NasaAPP\\Tools\\UnityStubCheck\\UnityStubCheck.csproj",
+        "projectName": "UnityStubCheck",
+        "projectPath": "C:\\Users\\bekan\\Desktop\\claude\\NasaAPP\\Tools\\UnityStubCheck\\UnityStubCheck.csproj",
+        "packagesPath": "C:\\Users\\bekan\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\bekan\\Desktop\\claude\\NasaAPP\\Tools\\UnityStubCheck\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\bekan\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "netstandard2.1"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "netstandard2.1": {
+            "targetAlias": "netstandard2.1",
+            "projectReferences": {
+              "C:\\Users\\bekan\\Desktop\\claude\\NasaAPP\\Tools\\CoreTests\\SpaceSim.Core\\SpaceSim.Core.csproj": {
+                "projectPath": "C:\\Users\\bekan\\Desktop\\claude\\NasaAPP\\Tools\\CoreTests\\SpaceSim.Core\\SpaceSim.Core.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "netstandard2.1": {
+          "targetAlias": "netstandard2.1",
+          "dependencies": {
+            "NUnit": {
+              "target": "Package",
+              "version": "[3.14.0, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "NETStandard.Library": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.426\\RuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}
