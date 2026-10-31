@@ -38,6 +38,32 @@ namespace SpaceSim.Runtime
         [Header("Launch site")]
         public LaunchSiteSettings launchSite = new LaunchSiteSettings();
 
+        [Header("Place in the star system")]
+        [Tooltip("planetId of the body this one orbits; empty = the star.")]
+        public string parentBodyId = "";
+        public OrbitProperties orbit = new OrbitProperties();
+        [TextArea(2, 6)] public string description = "";
+
+        /// <summary>Builds a runtime definition from engine-independent preset data.</summary>
+        public static PlanetDefinition FromPreset(CelestialBodyPreset p)
+        {
+            var d = CreateInstance<PlanetDefinition>();
+            d.name = p.DisplayName;
+            d.planetId = p.Id;
+            d.displayName = p.DisplayName;
+            d.description = p.Description ?? "";
+            d.physical = p.Physical.Clone();
+            d.generation = p.Generation.Clone();
+            d.optics = p.Optics.Clone();
+            d.orbit = p.Orbit.Clone();
+            d.parentBodyId = p.ParentId ?? "";
+            d.launchSite.latitudeDegrees = p.LaunchLatitude;
+            d.launchSite.longitudeDegrees = p.LaunchLongitude;
+            d.launchSite.name = "Площадка · " + p.DisplayName;
+            d.SyncLaunchSiteZone();
+            return d;
+        }
+
         /// <summary>Raised when the asset is edited in the Inspector (also during Play mode).</summary>
         public event Action Changed;
 
@@ -57,7 +83,7 @@ namespace SpaceSim.Runtime
         /// <summary>Notifies listeners after a change made from code.</summary>
         public void NotifyChanged() => Changed?.Invoke();
 
-        void SyncLaunchSiteZone()
+        internal void SyncLaunchSiteZone()
         {
             if (!flattenLaunchSite || generation == null || launchSite == null) return;
             var zone = new FlattenZone

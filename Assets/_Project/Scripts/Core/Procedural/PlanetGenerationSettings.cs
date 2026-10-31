@@ -15,6 +15,27 @@ namespace SpaceSim.Procedural
         public double minHeightAboveSeaLevel;
     }
 
+    /// <summary>Colouring scheme of the surface.</summary>
+    public enum SurfaceStyle
+    {
+        /// <summary>Earth-like: oceans, climate and moisture biomes.</summary>
+        Terrestrial,
+        /// <summary>Airless/dry rocky body: lowland/highland albedo, stains, darkened crater floors.</summary>
+        Rocky
+    }
+
+    /// <summary>A hand-placed crater (e.g. a recognisable landmark).</summary>
+    [Serializable]
+    public struct FeatureCrater
+    {
+        public double latitudeDegrees;
+        public double longitudeDegrees;
+        /// <summary>Rim radius [m].</summary>
+        public double radius;
+        /// <summary>Floor depth as a fraction of the radius.</summary>
+        public double depthRatio;
+    }
+
     /// <summary>
     /// Parameters of the deterministic surface generator. Together with <see cref="seed"/> and
     /// <see cref="algorithmVersion"/> they fully determine the surface. They describe appearance and relief
@@ -88,10 +109,33 @@ namespace SpaceSim.Procedural
 
         public FlattenZone[] flattenZones = new FlattenZone[0];
 
+        // ---- Terrestrial climate modifiers (0 = off; keep existing worlds unchanged) ----
+        /// <summary>0..1: dries the equatorial belt (Hadley-cell deserts).</summary>
+        public double equatorialAridity;
+        /// <summary>Extra mountain mask along coasts at low latitudes (0 = none).</summary>
+        public double coastalMountainBoost;
+
+        // ---- Rocky / airless style (used when surfaceStyle = Rocky) ----
+        public SurfaceStyle surfaceStyle = SurfaceStyle.Terrestrial;
+        /// <summary>Colour of basins / "seas" (low terrain).</summary>
+        public ColorRGB lowland = new ColorRGB(0.33f, 0.30f, 0.27f);
+        /// <summary>Colour of highlands.</summary>
+        public ColorRGB highland = new ColorRGB(0.52f, 0.49f, 0.44f);
+        /// <summary>Colour of patchy deposits (e.g. iron rust).</summary>
+        public ColorRGB stain = new ColorRGB(0.45f, 0.20f, 0.12f);
+        /// <summary>0 = no stains … 1 = everywhere.</summary>
+        public double stainCoverage;
+        public double stainFrequency = 6.0;
+        /// <summary>How much darker crater floors are (0..1).</summary>
+        public double craterFloorDarkening = 0.25;
+        /// <summary>Hand-placed named features (always present, in addition to random craters).</summary>
+        public FeatureCrater[] featureCraters = new FeatureCrater[0];
+
         public PlanetGenerationSettings Clone()
         {
             var c = (PlanetGenerationSettings)MemberwiseClone();
             c.flattenZones = flattenZones != null ? (FlattenZone[])flattenZones.Clone() : new FlattenZone[0];
+            c.featureCraters = featureCraters != null ? (FeatureCrater[])featureCraters.Clone() : new FeatureCrater[0];
             return c;
         }
 
@@ -107,6 +151,9 @@ namespace SpaceSim.Procedural
             craterMinRadius = Math.Max(1.0, craterMinRadius);
             craterMaxRadius = Math.Max(craterMinRadius, craterMaxRadius);
             if (flattenZones == null) flattenZones = new FlattenZone[0];
+            if (featureCraters == null) featureCraters = new FeatureCrater[0];
+            stainCoverage = MathD.Clamp01(stainCoverage);
+            craterFloorDarkening = MathD.Clamp01(craterFloorDarkening);
         }
 
         static int Clamp(int v, int min, int max) => v < min ? min : (v > max ? max : v);

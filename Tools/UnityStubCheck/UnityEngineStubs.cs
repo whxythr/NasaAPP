@@ -43,7 +43,7 @@ namespace UnityEngine
         public static GameObject Find(string name) => null;
     }
 
-    public class Transform : Component
+    public class Transform : Component, System.Collections.IEnumerable
     {
         public Vector3 position { get; set; }
         public Quaternion rotation { get; set; }
@@ -51,6 +51,7 @@ namespace UnityEngine
         public Vector3 localScale { get; set; }
         public Transform parent { get; set; }
         public void SetParent(Transform p, bool worldPositionStays) { }
+        public System.Collections.IEnumerator GetEnumerator() => null;
         public void SetPositionAndRotation(Vector3 p, Quaternion r) { }
     }
 
@@ -132,6 +133,7 @@ namespace UnityEngine
         public float width { get; set; }
         public float height { get; set; }
         public float yMax => y + height;
+        public Vector2 center => default;
     }
 
     public struct Bounds { public Bounds(Vector3 center, Vector3 size) { } }
@@ -240,6 +242,7 @@ namespace UnityEngine
         public DepthTextureMode depthTextureMode { get; set; }
         public float nearClipPlane { get; set; }
         public float farClipPlane { get; set; }
+        public Vector3 WorldToScreenPoint(Vector3 p) => p;
     }
 
     public static class Debug
@@ -293,6 +296,7 @@ namespace UnityEngine
     public sealed class Texture2D : Texture
     {
         public Texture2D(int w, int h, TextureFormat f, bool mip) { }
+        public static Texture2D whiteTexture => null;
         public void SetPixel(int x, int y, Color c) { }
         public void Apply() { }
     }
@@ -342,6 +346,7 @@ namespace UnityEngine
         public static void Box(Rect r, GUIContent c, GUIStyle s) { }
         public static void DrawTexture(Rect r, Texture t) { }
         public static void DragWindow() { }
+        public static bool Button(Rect r, string text, GUIStyle s) => false;
     }
 
     public static class GUILayout
@@ -367,7 +372,7 @@ namespace UnityEngine
 
     public static class GUIUtility { public static int keyboardControl { get; set; } }
 
-    public enum KeyCode { None, M, I, U, O, R, H, P, C, F, G, Comma, Period, Tab, Escape, Equals, Minus, F1 }
+    public enum KeyCode { None, M, I, U, O, R, H, P, C, F, G, J, N, Comma, Period, Tab, Escape, Equals, Minus, F1, W, A, S, D, Z, X, Space, LeftShift, LeftControl, Return }
 
     public static class Input
     {
@@ -385,6 +390,7 @@ namespace UnityEngine
     [AttributeUsage(AttributeTargets.Field)] public sealed class MinAttribute : Attribute { public MinAttribute(float m) { } }
     [AttributeUsage(AttributeTargets.Class)] public sealed class DefaultExecutionOrder : Attribute { public DefaultExecutionOrder(int o) { } }
     [AttributeUsage(AttributeTargets.Method)] public sealed class ContextMenu : Attribute { public ContextMenu(string n) { } }
+    [AttributeUsage(AttributeTargets.Field)] public sealed class TextAreaAttribute : Attribute { public TextAreaAttribute(int a, int b) { } }
     [AttributeUsage(AttributeTargets.Class)]
     public sealed class CreateAssetMenuAttribute : Attribute
     {

@@ -22,7 +22,7 @@ namespace SpaceSim.Runtime
         [SerializeField] float brightness = 2.5f;
         [SerializeField] float pixelSize = 1.6f;
 
-        PlanetRuntime planet;
+        StarSystemRuntime system;
         FloatingOrigin origin;
         SolarLightingController sun;
         Material material;
@@ -31,9 +31,9 @@ namespace SpaceSim.Runtime
         /// <summary>Current visibility 0..1 (exposed for HUD/tests).</summary>
         public float Visibility { get; private set; }
 
-        public void Initialize(PlanetRuntime planetRuntime, FloatingOrigin floatingOrigin, SolarLightingController solar, Shader shader)
+        public void Initialize(StarSystemRuntime starSystem, FloatingOrigin floatingOrigin, SolarLightingController solar, Shader shader)
         {
-            planet = planetRuntime;
+            system = starSystem;
             origin = floatingOrigin;
             sun = solar;
             mesh = BuildMesh();
@@ -106,8 +106,8 @@ namespace SpaceSim.Runtime
 
         void LateUpdate()
         {
-            if (planet == null || planet.Model == null) return;
-            var model = planet.Model;
+            if (system == null || system.Bodies.Count == 0 || system.Active.Model == null) return;
+            var model = system.Active.Model;
             Vector3d rel = origin.ViewerPosition - model.Position;
             double rho0 = model.Atmosphere.ReferenceDensity;
             // Fraction of the air column above the viewer (exact for an exponential atmosphere).

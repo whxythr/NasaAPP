@@ -97,10 +97,23 @@ namespace SpaceSim.Procedural
             climateJitter = new GradientNoise3D(DeterministicRandom.Mix(seed, SaltClimateJitter));
 
             var rng = new DeterministicRandom(DeterministicRandom.Mix(seed, SaltCraters));
-            craters = new Crater[s.craterCount];
+            craters = new Crater[s.craterCount + s.featureCraters.Length];
             double maxRim = 0.0;
             for (int i = 0; i < craters.Length; i++)
             {
+                if (i >= s.craterCount)
+                {
+                    // Hand-placed landmark craters come after the random ones, so the random set is unaffected.
+                    FeatureCrater f = s.featureCraters[i - s.craterCount];
+                    craters[i] = new Crater
+                    {
+                        Direction = PlanetRotation.DirectionFromLatLon(f.latitudeDegrees * MathD.DegToRad, f.longitudeDegrees * MathD.DegToRad),
+                        AngularRadius = Math.Max(1.0, f.radius) / planetRadius,
+                        Depth = 2.0 * f.depthRatio * Math.Max(1.0, f.radius)
+                    };
+                    maxRim = Math.Max(maxRim, craters[i].Depth * (0.6 * s.craterRimWidth * s.craterRimWidth + 0.1));
+                    continue;
+                }
                 double u = rng.NextDouble();
                 double r = s.craterMinRadius + (s.craterMaxRadius - s.craterMinRadius) * u * u * u; // many small, few large
                 craters[i] = new Crater
@@ -126,7 +139,7 @@ namespace SpaceSim.Procedural
             {
                 var z = s.flattenZones[i];
                 Vector3d dir = PlanetRotation.DirectionFromLatLon(z.latitudeDegrees * MathD.DegToRad, z.longitudeDegrees * MathD.DegToRad);
-                double h = RawTerrainHeight(dir, out _);
+                double h = RawTerrainHeight(dir, out _, out _);
                 double floor = (s.hasOcean ? s.seaLevel : MinTerrainHeight) + Math.Max(0.0, z.minHeightAboveSeaLevel);
                 flats[i] = new Flat { Direction = dir, ChordRadius = Math.Max(1.0, z.radius) / planetRadius, Height = Math.Max(h, floor) };
                 MaxTerrainHeight = Math.Max(MaxTerrainHeight, flats[i].Height);
@@ -143,7 +156,7 @@ namespace SpaceSim.Procedural
         public double MinSurfaceHeight => s.hasOcean ? Math.Max(MinTerrainHeight, s.seaLevel) : MinTerrainHeight;
         public double MaxSurfaceHeight => s.hasOcean ? Math.Max(MaxTerrainHeight, s.seaLevel) : MaxTerrainHeight;
 
-        public double TerrainHeight(Vector3d unitDirection) => ApplyFlatten(unitDirection, RawTerrainHeight(unitDirection, out _));
+        public double TerrainHeight(Vector3d unitDirection) => ApplyFlatten(unitDirection, RawTerrainHeight(unitDirection, out _, out _));
 
         public double SurfaceHeight(Vector3d unitDirection)
         {
@@ -153,7 +166,7 @@ namespace SpaceSim.Procedural
 
         public SurfaceSample Sample(Vector3d unitDirection)
         {
-            double h = ApplyFlatten(unitDirection, RawTerrainHeight(unitDirection, out Vector3d warped));
+            double h = ApplyFlatten(unitDirection, RawTerrainHeight(unitDirection, out Vector3d warped, out double craterFloor));
             bool water = s.hasOcean && h < s.seaLevel;
             var sample = new SurfaceSample
             {
@@ -161,12 +174,33 @@ namespace SpaceSim.Procedural
                 SurfaceHeight = water ? s.seaLevel : h,
                 IsWater = water
             };
-            Shade(unitDirection, warped, h, water, ref sample);
+            if (s.surfaceStyle == SurfaceStyle.Rocky) ShadeRocky(warped, h, craterFloor, ref sample);
+            else Shade(unitDirection, warped, h, water, ref sample);
             return sample;
         }
 
-        double RawTerrainHeight(Vector3d p, out Vector3d q)
+        /// <summary>Airless/dry body: lowland "seas" vs highlands, brightness variation, stains, dark crater floors.</summary>
+        void ShadeRocky(Vector3d q, double h, double craterFloor, ref SurfaceSample sample)
         {
+            double basin = Math.Max(1.0, 0.25 * s.oceanDepthAmplitude);
+            double t = MathD.SmoothStep(-basin, 0.15 * Math.Max(1.0, s.continentAmplitude), h);
+            ColorRGB c = ColorRGB.Lerp(s.lowland, s.highland, t);
+            double variation = moisture.Fbm(q * s.moistureFrequency, 4, 2.0, 0.5);
+            c = c * (float)(0.92 + 0.35 * variation);
+            if (s.stainCoverage > 0.0)
+            {
+                double n = 0.5 + 0.9 * climateJitter.Fbm(q * s.stainFrequency, 4, 2.0, 0.5);
+                double w = MathD.SmoothStep(1.0 - s.stainCoverage, 1.0 - s.stainCoverage + 0.12, n);
+                c = ColorRGB.Lerp(c, s.stain, w);
+            }
+            c = c * (float)(1.0 - s.craterFloorDarkening * craterFloor);
+            sample.Albedo = c;
+            sample.Biome = t < 0.5 ? Biome.Desert : Biome.Rock;
+        }
+
+        double RawTerrainHeight(Vector3d p, out Vector3d q, out double craterFloor)
+        {
+            craterFloor = 0.0;
             Vector3d wp = p * s.warpFrequency;
             q = p + new Vector3d(warpX.Fbm(wp, 3, 2.0, 0.5), warpY.Fbm(wp, 3, 2.0, 0.5), warpZ.Fbm(wp, 3, 2.0, 0.5)) * s.warpStrength;
 
@@ -176,6 +210,13 @@ namespace SpaceSim.Procedural
             double land = MathD.SmoothStep(-0.02, 0.12, c);
             double mask = MathD.SmoothStep(0.02, 0.30, c) *
                           MathD.SmoothStep(-0.15, 0.35, mountainMask.Fbm(q * 1.3, 3, 2.0, 0.5));
+            if (s.coastalMountainBoost > 0.0)
+            {
+                // Coastal ranges near the equator: land just above sea level, low latitude.
+                double coast = MathD.SmoothStep(0.0, 0.06, c) * (1.0 - MathD.SmoothStep(0.10, 0.22, c));
+                double tropics = 1.0 - MathD.SmoothStep(0.15, 0.45, Math.Abs(p.z));
+                mask = Math.Min(1.0, mask + s.coastalMountainBoost * coast * tropics);
+            }
             if (mask > 0.0)
             {
                 double ridge = mountain.Ridged(q * s.mountainFrequency, s.mountainOctaves, s.lacunarity, 0.5);
@@ -194,6 +235,7 @@ namespace SpaceSim.Procedural
                 if (dot < 1.0 - 0.5 * reach * reach) continue;
                 double x = (p - cr.Direction).Magnitude / cr.AngularRadius;
                 h += CraterShape(x, s.craterRimWidth) * cr.Depth;
+                if (x < 1.0) craterFloor = Math.Max(craterFloor, 1.0 - x * x);
             }
             return h;
         }
@@ -226,6 +268,8 @@ namespace SpaceSim.Procedural
             double temp = 1.0 - p.z * p.z + 0.08 * climateJitter.Fbm(q * 3.0, 3, 2.0, 0.5)
                           - Math.Max(0.0, h - s.seaLevel) * s.elevationCooling;
             double wet = MathD.Clamp01(0.5 + 0.9 * moisture.Fbm(q * s.moistureFrequency, 4, 2.0, 0.5));
+            if (s.equatorialAridity > 0.0)
+                wet = MathD.Clamp01(wet - s.equatorialAridity * (1.0 - MathD.SmoothStep(0.0, 0.35, Math.Abs(p.z))));
 
             if (water)
             {

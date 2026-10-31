@@ -54,7 +54,8 @@ namespace SpaceSim.Runtime
 
         void Update()
         {
-            if (!initialized) return;
+            // After a script reload in Play mode the (non-serialized) simulation is gone: do nothing until restarted.
+            if (!initialized || body == null || body.Simulation == null || planet == null || planet.Model == null) return;
             FlightPhase before = classifier.Phase;
             Refresh();
             if (classifier.Phase != before) PhaseChanged?.Invoke(before, classifier.Phase);

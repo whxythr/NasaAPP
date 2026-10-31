@@ -8,7 +8,16 @@ namespace SpaceSim.Runtime
         static bool initialized;
         static Texture2D panelTexture, barTexture, barBackTexture;
 
-        public static GUIStyle Panel, Title, Label, Value, Small, Mono, Phase, Hint, Button, Field, Body, Header;
+        public static GUIStyle Panel, Title, Label, Value, Small, Mono, Phase, Hint, Button, Field, Body, Header, BigButton;
+
+        /// <summary>Filled square marker centred at <paramref name="center"/>.</summary>
+        public static void Dot(Vector2 center, float size, Color color)
+        {
+            var c = GUI.color;
+            GUI.color = color;
+            GUI.DrawTexture(new Rect(center.x - size * 0.5f, center.y - size * 0.5f, size, size), Texture2D.whiteTexture);
+            GUI.color = c;
+        }
         public static readonly Color Accent = new Color(0.55f, 0.85f, 1f);
         public static readonly Color Warning = new Color(1f, 0.75f, 0.3f);
         public static readonly Color Danger = new Color(1f, 0.4f, 0.35f);
@@ -66,6 +75,8 @@ namespace SpaceSim.Runtime
             Hint = new GUIStyle(Small) { alignment = TextAnchor.MiddleCenter, wordWrap = false };
 
             Button = new GUIStyle(GUI.skin.button) { fontSize = 12 };
+            BigButton = new GUIStyle(GUI.skin.button) { fontSize = 22, fontStyle = FontStyle.Bold };
+            BigButton.normal.textColor = Color.white;
             Field = new GUIStyle(GUI.skin.textField) { fontSize = 13 };
             if (mono != null) Field.font = mono;
 

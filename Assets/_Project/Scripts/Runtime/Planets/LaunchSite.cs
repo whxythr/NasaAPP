@@ -24,11 +24,14 @@ namespace SpaceSim.Runtime
 
             BuildGeometry(planet.Definition.launchSite.padRadius);
             Place();
-            planet.ModelChanged += _ => Place();
+            planet.ModelChanged += OnModelChanged;
         }
+
+        void OnModelChanged(SpaceSim.Planets.PlanetModel model) => Place();
 
         void OnDestroy()
         {
+            if (planet != null) planet.ModelChanged -= OnModelChanged;
             if (concrete != null) Destroy(concrete);
             if (steel != null) Destroy(steel);
             if (marker != null) Destroy(marker);

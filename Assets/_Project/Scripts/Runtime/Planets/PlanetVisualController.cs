@@ -88,7 +88,7 @@ namespace SpaceSim.Runtime
             double t = simulation.RenderTime;
             Vector3 center = planet.UnityCenter(origin);
             Quaternion rotation = planet.UnityRotation(t);
-            float radius = (float)planet.Model.Radius;
+            float radius = (float)(planet.Model.Radius * planet.RenderScale);
 
             if (importedInstance != null)
             {

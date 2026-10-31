@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\bekan\\Desktop\\claude\\NasaAPP\\Tools\\UnityStubCheck\\UnityStubCheck.csproj": {}
+    "D:\\NasaAPP\\Tools\\UnityStubCheck\\UnityStubCheck.csproj": {}
   },
   "projects": {
-    "C:\\Users\\bekan\\Desktop\\claude\\NasaAPP\\Tools\\CoreTests\\SpaceSim.Core\\SpaceSim.Core.csproj": {
+    "D:\\NasaAPP\\Tools\\CoreTests\\SpaceSim.Core\\SpaceSim.Core.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\bekan\\Desktop\\claude\\NasaAPP\\Tools\\CoreTests\\SpaceSim.Core\\SpaceSim.Core.csproj",
+        "projectUniqueName": "D:\\NasaAPP\\Tools\\CoreTests\\SpaceSim.Core\\SpaceSim.Core.csproj",
         "projectName": "SpaceSim.Core",
-        "projectPath": "C:\\Users\\bekan\\Desktop\\claude\\NasaAPP\\Tools\\CoreTests\\SpaceSim.Core\\SpaceSim.Core.csproj",
+        "projectPath": "D:\\NasaAPP\\Tools\\CoreTests\\SpaceSim.Core\\SpaceSim.Core.csproj",
         "packagesPath": "C:\\Users\\bekan\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\bekan\\Desktop\\claude\\NasaAPP\\Tools\\CoreTests\\SpaceSim.Core\\obj\\",
+        "outputPath": "D:\\NasaAPP\\Tools\\CoreTests\\SpaceSim.Core\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\bekan\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -62,14 +62,14 @@
         }
       }
     },
-    "C:\\Users\\bekan\\Desktop\\claude\\NasaAPP\\Tools\\UnityStubCheck\\UnityStubCheck.csproj": {
+    "D:\\NasaAPP\\Tools\\UnityStubCheck\\UnityStubCheck.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\bekan\\Desktop\\claude\\NasaAPP\\Tools\\UnityStubCheck\\UnityStubCheck.csproj",
+        "projectUniqueName": "D:\\NasaAPP\\Tools\\UnityStubCheck\\UnityStubCheck.csproj",
         "projectName": "UnityStubCheck",
-        "projectPath": "C:\\Users\\bekan\\Desktop\\claude\\NasaAPP\\Tools\\UnityStubCheck\\UnityStubCheck.csproj",
+        "projectPath": "D:\\NasaAPP\\Tools\\UnityStubCheck\\UnityStubCheck.csproj",
         "packagesPath": "C:\\Users\\bekan\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\bekan\\Desktop\\claude\\NasaAPP\\Tools\\UnityStubCheck\\obj\\",
+        "outputPath": "D:\\NasaAPP\\Tools\\UnityStubCheck\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\bekan\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -84,8 +84,8 @@
           "netstandard2.1": {
             "targetAlias": "netstandard2.1",
             "projectReferences": {
-              "C:\\Users\\bekan\\Desktop\\claude\\NasaAPP\\Tools\\CoreTests\\SpaceSim.Core\\SpaceSim.Core.csproj": {
-                "projectPath": "C:\\Users\\bekan\\Desktop\\claude\\NasaAPP\\Tools\\CoreTests\\SpaceSim.Core\\SpaceSim.Core.csproj"
+              "D:\\NasaAPP\\Tools\\CoreTests\\SpaceSim.Core\\SpaceSim.Core.csproj": {
+                "projectPath": "D:\\NasaAPP\\Tools\\CoreTests\\SpaceSim.Core\\SpaceSim.Core.csproj"
               }
             }
           }

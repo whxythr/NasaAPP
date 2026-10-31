@@ -25,11 +25,20 @@ namespace SpaceSim.Runtime
         StarfieldController stars;
         FlightManualUI manual;
         InitialConditionsPanel initialConditions;
+        StarSystemRuntime system;
+        SolarLightingController sun;
+        FloatingOrigin origin;
+        Action switchToNextBody;
         bool visible = true;
+        bool showMarkers = true;
+        bool showMap;
+        RocketControls rocketControls;
 
         public void Initialize(FlightStateController flightState, FlightBody flightBody, PlanetRuntime planetRuntime,
             SimulationController sim, SpaceCameraController cam, StarfieldController starfield,
-            FlightManualUI manualUi, InitialConditionsPanel icPanel)
+            FlightManualUI manualUi, InitialConditionsPanel icPanel,
+            StarSystemRuntime starSystem, SolarLightingController starLight, FloatingOrigin floatingOrigin, Action nextBody,
+            RocketControls controls)
         {
             state = flightState;
             body = flightBody;
@@ -39,12 +48,33 @@ namespace SpaceSim.Runtime
             stars = starfield;
             manual = manualUi;
             initialConditions = icPanel;
+            system = starSystem;
+            sun = starLight;
+            origin = floatingOrigin;
+            switchToNextBody = nextBody;
+            rocketControls = controls;
         }
 
         void Update()
         {
-            if (state == null || FlightInput.IsTyping) return;
+            if (state == null) return;
+            if (!system.SpaceUnlocked && state.Telemetry.AboveSpaceBoundary)
+            {
+                system.UnlockSpace();
+                state.Notify("Вы в космосе! Открыта звёздная система: Tab — карта системы, N — метки тел, J — перелёт к другому телу.");
+            }
+            if (FlightInput.IsTyping) return;
             if (FlightInput.GetKeyDown(InputKey.H)) visible = !visible;
+            if (system.SpaceUnlocked)
+            {
+                if (FlightInput.GetKeyDown(InputKey.N)) showMarkers = !showMarkers;
+                if (FlightInput.GetKeyDown(InputKey.Tab)) showMap = !showMap;
+                if (FlightInput.GetKeyDown(InputKey.J))
+                {
+                    switchToNextBody?.Invoke();
+                    return;
+                }
+            }
             if (FlightInput.GetKeyDown(InputKey.U)) units = units == DisplayUnitSystem.SI ? DisplayUnitSystem.Kilometric : DisplayUnitSystem.SI;
             if (FlightInput.GetKeyDown(InputKey.O)) showOrbitAnalysis = !showOrbitAnalysis;
             if (FlightInput.GetKeyDown(InputKey.M) || FlightInput.GetKeyDown(InputKey.F1)) manual.Toggle();
@@ -52,7 +82,7 @@ namespace SpaceSim.Runtime
             if (FlightInput.GetKeyDown(InputKey.R))
             {
                 body.ResetToLaunchSite();
-                state.Notify("Аппарат возвращён на стартовую площадку.");
+                state.Notify("Новая заправленная ракета на стартовой площадке.");
             }
         }
 
@@ -68,6 +98,8 @@ namespace SpaceSim.Runtime
             Vector2 screen = HudStyle.VirtualScreen;
             FlightTelemetry t = state.Telemetry;
 
+            if (system.SpaceUnlocked && showMarkers) DrawBodyMarkers();
+
             GUILayout.BeginArea(new Rect(12, 12, 360, screen.y - 80));
             DrawTelemetry(t);
             if (showOrbitAnalysis) DrawOrbit(t);
@@ -75,11 +107,128 @@ namespace SpaceSim.Runtime
 
             DrawStatus(t, screen);
             DrawProximity(t, screen);
+            DrawRocket(t, screen);
             DrawNotifications(screen);
-            GUI.Label(new Rect(0, screen.y - 22, screen.x, 20),
-                "ПКМ — обзор · колесо/± — зум · C — система отсчёта камеры · F — фокус планета/аппарат · , . — ускорение времени · P — пауза · " +
-                "I — начальные условия · R — на площадку · M/F1 — Flight Manual · O — анализ орбиты · U — единицы · H — скрыть",
+            if (system.SpaceUnlocked && showMap) DrawSystemMap(screen);
+            GUI.Label(new Rect(0, screen.y - 40, screen.x, 20),
+                "РАКЕТА: Enter/кнопка — зажигание · W/S — тангаж · A/D — курс · Shift/Ctrl — тяга · Z — полная · X — отсечка · Пробел — отделить ступень",
                 HudStyle.Hint);
+            GUI.Label(new Rect(0, screen.y - 22, screen.x, 20),
+                "ПКМ — обзор · колесо/± — зум · C — система отсчёта · F — фокус · , . — время · P — пауза · I — нач. условия · R — новая ракета на площадке · " +
+                (system.SpaceUnlocked ? "Tab — карта · N — метки · J — к другому телу · " : "") + "M/F1 — Manual · O — орбита · U — единицы · H — скрыть",
+                HudStyle.Hint);
+        }
+
+        void DrawRocket(FlightTelemetry t, Vector2 screen)
+        {
+            var r = body.Rocket;
+            if (r == null) return;
+            var area = new Rect(screen.x - 330, screen.y - 340, 310, 250);
+            GUILayout.BeginArea(area);
+            GUILayout.BeginVertical(HudStyle.Panel);
+            GUILayout.Label("РАКЕТА · " + (r.HasStages ? r.CurrentStage.name + " (" + (r.StageIndex + 1) + "/" + r.StageCount + ")" : "только зонд"), HudStyle.Title);
+            if (r.HasStages)
+            {
+                double fuel = r.CurrentStage.propellantMass > 0 ? r.CurrentPropellant / r.CurrentStage.propellantMass : 0.0;
+                HudStyle.Row("Двигатель", r.IsBurning ? "РАБОТАЕТ" : (r.CanBurn ? "выключен" : "топливо кончилось"), 130);
+                HudStyle.Row("Топливо ступени", UnitFormatter.Number(fuel * 100.0, 1) + " %  (" + UnitFormatter.Number(r.CurrentPropellant / 1000.0, 1) + " т)", 130);
+                HudStyle.Row("Тяга (дроссель)", UnitFormatter.Number(r.Throttle * 100.0, 0) + " %", 130);
+                double weight = r.Mass * t.GravityMagnitude;
+                HudStyle.Row("Тяга / вес", t.ThrustAcceleration > 0 ? UnitFormatter.Number(t.ThrustAcceleration * r.Mass / weight, 2) : "—", 130);
+                HudStyle.Row("Расход ṁ", UnitFormatter.Number(r.MassFlow, 0) + " кг/с", 130);
+            }
+            HudStyle.Row("Масса", UnitFormatter.Number(body.Simulation.CurrentMass / 1000.0, 2) + " т", 130);
+            HudStyle.Row("Тангаж / курс", UnitFormatter.Number(r.PitchDegrees, 1) + "° / " + UnitFormatter.Number(r.HeadingDegrees, 0) + "°", 130);
+            HudStyle.Row("Запас Δv (вакуум)", UnitFormatter.Speed(r.DeltaVRemaining(), DisplayUnitSystem.SI), 130);
+            GUILayout.EndVertical();
+            GUILayout.EndArea();
+
+            // Big action button in the bottom centre.
+            var button = new Rect(screen.x * 0.5f - 130, screen.y - 112, 260, 56);
+            if (r.HasStages && !r.IsBurning && r.CanBurn)
+            {
+                string label = body.Simulation.IsLanded ? "ЗАПУСК" : "ВКЛЮЧИТЬ ДВИГАТЕЛЬ";
+                if (GUI.Button(button, label, HudStyle.BigButton)) rocketControls.Ignite();
+            }
+            else if (r.HasStages && !r.CanBurn)
+            {
+                if (GUI.Button(button, "ОТДЕЛИТЬ СТУПЕНЬ", HudStyle.BigButton)) rocketControls.Separate();
+            }
+        }
+
+        /// <summary>Top-down map of the system (true scale of orbit radii): the star, orbits and current positions.</summary>
+        void DrawSystemMap(Vector2 screen)
+        {
+            float size = Mathf.Min(screen.x, screen.y) - 200f;
+            var rect = new Rect((screen.x - size) * 0.5f, (screen.y - size) * 0.5f, size, size);
+            GUI.Box(rect, GUIContent.none, HudStyle.Panel);
+            GUI.Label(new Rect(rect.x + 10, rect.y + 6, size - 20, 20), "КАРТА СИСТЕМЫ · " + system.SystemName + " (вид сверху, Tab — закрыть)", HudStyle.Title);
+            Vector2 c = rect.center;
+            double maxR = 1.0;
+            var heliocentric = new Vector3d[system.Bodies.Count];
+            for (int i = 0; i < system.Bodies.Count; i++)
+            {
+                heliocentric[i] = system.Bodies[i].Runtime.Model.Position - system.StarPosition;
+                if (system.Bodies[i].ParentIndex < 0) maxR = System.Math.Max(maxR, heliocentric[i].Magnitude);
+            }
+            float scale = (size * 0.45f) / (float)maxR;
+            HudStyle.Dot(c, 10f, HudStyle.Warning);
+            GUI.Label(new Rect(c.x + 8, c.y - 9, 200, 18), system.Star.name, HudStyle.Label);
+            for (int i = 0; i < system.Bodies.Count; i++)
+            {
+                var b = system.Bodies[i];
+                Vector3d hp = heliocentric[i];
+                if (b.ParentIndex < 0)
+                {
+                    float orbitR = (float)hp.Magnitude * scale;
+                    for (int k = 0; k < 96; k++)
+                    {
+                        float a = k / 96f * Mathf.PI * 2f;
+                        HudStyle.Dot(c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * orbitR, 2f, new Color(1f, 1f, 1f, 0.25f));
+                    }
+                }
+                var p = c + new Vector2((float)hp.x, -(float)hp.y) * scale;
+                if (b.ParentIndex >= 0) p += new Vector2(10f, 10f); // moons: offset so they don't hide the parent
+                bool active = i == system.ActiveIndex;
+                HudStyle.Dot(p, active ? 9f : 7f, active ? HudStyle.Danger : HudStyle.Accent);
+                double au = hp.Magnitude / PhysicalConstants.AstronomicalUnit;
+                GUI.Label(new Rect(p.x + 8, p.y - 9, 280, 18), b.Name + (active ? "  ◄ вы здесь" : "") + (b.ParentIndex < 0 ? "  " + UnitFormatter.Number(au, 3) + " а.е." : ""), HudStyle.Label);
+            }
+        }
+
+        /// <summary>Name and distance labels over the star and every other body (direction-only projection).</summary>
+        void DrawBodyMarkers()
+        {
+            Camera cam = cameraController.Camera;
+            if (cam == null) return;
+            Vector3d viewer = origin.ViewerPosition;
+            Marker(cam, system.StarPosition - viewer, system.Star.radius, system.Star.name, HudStyle.Warning);
+            for (int i = 0; i < system.Bodies.Count; i++)
+            {
+                if (i == system.ActiveIndex) continue;
+                var b = system.Bodies[i];
+                if (b.Runtime.Model == null) continue;
+                Marker(cam, b.Runtime.Model.Position - viewer, b.Runtime.Model.Radius, b.Name, HudStyle.Accent);
+            }
+        }
+
+        static void Marker(Camera cam, Vector3d relative, double radius, string name, Color color)
+        {
+            double distance = relative.Magnitude;
+            if (distance <= 0.0) return;
+            Vector3 dir = CoordinateSystem.ToUnityVector(relative / distance);
+            Vector3 screenPoint = cam.WorldToScreenPoint(cam.transform.position + dir * 1000f);
+            if (screenPoint.z <= 0f) return; // behind the camera
+            float s = HudStyle.Scale;
+            var p = new Vector2(screenPoint.x / s, (Screen.height - screenPoint.y) / s);
+            string dist = distance - radius > 1.0e9
+                ? UnitFormatter.Number((distance - radius) / PhysicalConstants.AstronomicalUnit, 3) + " а.е."
+                : UnitFormatter.Number((distance - radius) / 1000.0, 0) + " км";
+            var c = GUI.color;
+            GUI.color = color;
+            GUI.Label(new Rect(p.x - 4, p.y - 9, 20, 18), "◇", HudStyle.Label);
+            GUI.Label(new Rect(p.x + 10, p.y - 9, 320, 18), name + " · " + dist, HudStyle.Label);
+            GUI.color = c;
         }
 
         void DrawTelemetry(FlightTelemetry t)

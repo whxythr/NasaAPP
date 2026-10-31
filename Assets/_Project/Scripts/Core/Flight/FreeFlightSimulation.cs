@@ -75,18 +75,53 @@ namespace SpaceSim.Flight
         /// <summary>Sub-steps used during the last <see cref="Step"/> (diagnostics).</summary>
         public int LastSubstepCount { get; private set; }
 
+        /// <summary>Optional rocket. While it has stages its mass, drag and thrust replace the bare body's.</summary>
+        public RocketState Rocket { get; set; }
+
+        /// <summary>Current mass [kg] (rocket mass while a rocket is attached).</summary>
+        public double CurrentMass => Rocket != null && Rocket.HasStages ? Rocket.Mass : (Rocket != null ? Rocket.Configuration.payloadMass : Mass);
+
         // ---- IAccelerationModel -------------------------------------------------------------
 
         public Vector3d Acceleration(double time, Vector3d position, Vector3d velocity) =>
-            Gravity.AccelerationAt(position) + DragAcceleration(position, velocity);
+            Gravity.AccelerationAt(position) + DragAcceleration(position, velocity) + ThrustAcceleration(position);
 
         public Vector3d DragAcceleration(Vector3d position, Vector3d velocity)
         {
-            if (!Drag.enabled || Mass <= 0.0) return Vector3d.Zero;
+            double m = CurrentMass;
+            if (!Drag.enabled || m <= 0.0) return Vector3d.Zero;
             double rho = planet.DensityAt(position);
             if (rho <= 0.0) return Vector3d.Zero;
             Vector3d vRel = velocity - planet.AirVelocityAt(position);
-            return AtmosphericDrag.DragForce(rho, vRel, Drag.dragCoefficient, Drag.referenceArea) / Mass;
+            bool rocket = Rocket != null && Rocket.HasStages;
+            double cd = rocket ? Rocket.Configuration.dragCoefficient : Drag.dragCoefficient;
+            double area = rocket ? Rocket.Configuration.ReferenceArea : Drag.referenceArea;
+            return AtmosphericDrag.DragForce(rho, vRel, cd, area) / m;
+        }
+
+        /// <summary>Thrust acceleration [m/s²] along the commanded attitude (local horizon frame at the position).</summary>
+        public Vector3d ThrustAcceleration(Vector3d position)
+        {
+            if (Rocket == null || !Rocket.IsBurning) return Vector3d.Zero;
+            double rho0 = planet.Atmosphere.ReferenceDensity;
+            double h = planet.AltitudeAboveReference(position);
+            double p0 = planet.Atmosphere.Pressure(0.0);
+            double pressureRatio = rho0 > 0.0 && p0 > 0.0 ? planet.Atmosphere.Pressure(h) / p0 : 0.0;
+            double thrust = Rocket.Thrust(pressureRatio);
+            return ThrustDirection(position) * (thrust / Rocket.Mass);
+        }
+
+        /// <summary>Unit thrust direction in the inertial frame from the rocket's pitch/heading.</summary>
+        public Vector3d ThrustDirection(Vector3d position)
+        {
+            Vector3d up = (position - planet.Position).Normalized;
+            Vector3d e = Vector3d.Cross(planet.Rotation.SpinAxis, up);
+            if (e.SqrMagnitude < 1e-20) e = Vector3d.Cross(Vector3d.UnitX, up);
+            Vector3d east = e.Normalized;
+            Vector3d north = Vector3d.Cross(up, east);
+            if (Rocket == null) return up;
+            Rocket.LocalDirection(out double cu, out double cn, out double ce);
+            return (up * cu + north * cn + east * ce).Normalized;
         }
 
         // ---- Initial conditions (test tools; nothing here chooses a trajectory for the player) ----
@@ -144,9 +179,17 @@ namespace SpaceSim.Flight
             PreviousState = State;
             if (IsLanded)
             {
-                State = LandedState(State.Time + dt);
-                LastSubstepCount = 0;
-                return;
+                if (Rocket != null && Rocket.IsBurning && ThrustExceedsWeight(State.Position))
+                {
+                    IsLanded = false; // lift-off: start from the co-rotating pad state
+                }
+                else
+                {
+                    Rocket?.Burn(dt); // engine held down on the pad: propellant still burns
+                    State = LandedState(State.Time + dt);
+                    LastSubstepCount = 0;
+                    return;
+                }
             }
 
             double maxStep = MaxStableStep(State);
@@ -167,7 +210,22 @@ namespace SpaceSim.Flight
                     return;
                 }
                 State = after;
+                Rocket?.Burn(h);
             }
+        }
+
+        /// <summary>
+        /// Lift-off test: the upward component of thrust + gravity must exceed what is needed to keep co-rotating
+        /// with the ground (the centripetal acceleration of the pad).
+        /// </summary>
+        bool ThrustExceedsWeight(Vector3d position)
+        {
+            Vector3d rel = position - planet.Position;
+            Vector3d up = rel.Normalized;
+            Vector3d w = planet.Rotation.AngularVelocity;
+            Vector3d centripetal = -Vector3d.Cross(w, Vector3d.Cross(w, rel));
+            Vector3d net = ThrustAcceleration(position) + Gravity.AccelerationAt(position);
+            return Vector3d.Dot(net, up) > Vector3d.Dot(centripetal, up);
         }
 
         double MaxStableStep(BodyState s)

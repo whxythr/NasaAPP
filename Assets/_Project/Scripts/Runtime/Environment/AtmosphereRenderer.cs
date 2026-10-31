@@ -6,9 +6,10 @@ using UnityEngine.Rendering;
 namespace SpaceSim.Runtime
 {
     /// <summary>
-    /// Renders the atmosphere shell and publishes atmosphere parameters as shader globals for the terrain.
-    /// Rayleigh density follows the PHYSICAL profile via its (effective) scale height; the shell radius is the
-    /// visual bound derived from it — not the 100 km "space boundary". Rendering never feeds back into physics.
+    /// One per planet: renders that planet's atmosphere shell and feeds that planet's surface material with its own
+    /// star direction, centre, scale and scattering parameters. Rayleigh density follows the PHYSICAL profile via its
+    /// (effective) scale height; the shell radius is the visual bound derived from it — not the "space boundary".
+    /// Rendering never feeds back into physics.
     /// </summary>
     [DefaultExecutionOrder(120)]
     public sealed class AtmosphereRenderer : MonoBehaviour
@@ -29,16 +30,27 @@ namespace SpaceSim.Runtime
         static readonly int ViewSamples = Shader.PropertyToID("_ViewSamples");
         static readonly int LightSamples = Shader.PropertyToID("_LightSamples");
         static readonly int UseDepth = Shader.PropertyToID("_UseDepth");
+        static readonly int RenderScale = Shader.PropertyToID("_RenderScale");
+        static readonly int HazeScattering = Shader.PropertyToID("_HazeScattering");
+        static readonly int HazeAltitude = Shader.PropertyToID("_HazeAltitude");
+        static readonly int HazeThickness = Shader.PropertyToID("_HazeThickness");
 
-        static readonly int GBetaRayleigh = Shader.PropertyToID("_SpaceSimBetaRayleigh");
-        static readonly int GMieExtinction = Shader.PropertyToID("_SpaceSimMieExtinction");
-        static readonly int GScaleHeightR = Shader.PropertyToID("_SpaceSimScaleHeightR");
-        static readonly int GScaleHeightM = Shader.PropertyToID("_SpaceSimScaleHeightM");
-        static readonly int GHasAtmosphere = Shader.PropertyToID("_SpaceSimHasAtmosphere");
+        static readonly int SSunDir = Shader.PropertyToID("_SpaceSimSunDir");
+        static readonly int SSunColor = Shader.PropertyToID("_SpaceSimSunColor");
+        static readonly int SPlanetCenter = Shader.PropertyToID("_SpaceSimPlanetCenter");
+        static readonly int SPlanetRadius = Shader.PropertyToID("_SpaceSimPlanetRadius");
+        static readonly int SRenderScale = Shader.PropertyToID("_SpaceSimRenderScale");
+        static readonly int SBetaRayleigh = Shader.PropertyToID("_SpaceSimBetaRayleigh");
+        static readonly int SMieExtinction = Shader.PropertyToID("_SpaceSimMieExtinction");
+        static readonly int SScaleHeightR = Shader.PropertyToID("_SpaceSimScaleHeightR");
+        static readonly int SScaleHeightM = Shader.PropertyToID("_SpaceSimScaleHeightM");
+        static readonly int SHasAtmosphere = Shader.PropertyToID("_SpaceSimHasAtmosphere");
+        static readonly int SSkyAmbient = Shader.PropertyToID("_SpaceSimSkyAmbient");
 
         PlanetRuntime planet;
         FloatingOrigin origin;
-        SolarLightingController sun;
+        StarSystemRuntime system;
+        Material surfaceMaterial;
         Material material;
         MeshRenderer meshRenderer;
         Mesh shellMesh;
@@ -46,12 +58,14 @@ namespace SpaceSim.Runtime
         /// <summary>Mesh inflation so the polygonal shell fully covers the analytic sphere.</summary>
         const float ShellInflation = 1.03f;
 
-        public void Initialize(PlanetRuntime planetRuntime, FloatingOrigin floatingOrigin, SolarLightingController solar, Shader shader)
+        public void Initialize(PlanetRuntime planetRuntime, FloatingOrigin floatingOrigin, StarSystemRuntime starSystem,
+            Shader shader, Material planetSurfaceMaterial)
         {
             planet = planetRuntime;
             origin = floatingOrigin;
-            sun = solar;
-            material = new Material(shader) { name = "Atmosphere (runtime)" };
+            system = starSystem;
+            surfaceMaterial = planetSurfaceMaterial;
+            material = new Material(shader) { name = "Atmosphere · " + planet.Definition.displayName };
             shellMesh = ProceduralMeshes.UvSphere(96, 48, "AtmosphereShell");
             shellMesh.bounds = new Bounds(Vector3.zero, Vector3.one * 2f * ShellInflation);
             gameObject.AddComponent<MeshFilter>().sharedMesh = shellMesh;
@@ -93,23 +107,39 @@ namespace SpaceSim.Runtime
             var rayleigh = new Vector4((float)br.x * tint.r, (float)br.y * tint.g, (float)br.z * tint.b, 0f);
             float mieExt = (float)(optics.mieScattering * optics.mieExtinctionRatio);
             float hR = (float)EffectiveScaleHeight(model.Atmosphere);
-            float hM = (float)optics.mieScaleHeight;
+            float hM = Mathf.Max(1f, (float)optics.mieScaleHeight);
+            float scale = (float)planet.RenderScale;
+            Vector3 center = planet.UnityCenter(origin);
+            Vector3 sunDir = CoordinateSystem.ToUnityVector(system.SunDirectionFrom(model.Position));
 
-            Shader.SetGlobalVector(GBetaRayleigh, rayleigh);
-            Shader.SetGlobalFloat(GMieExtinction, mieExt);
-            Shader.SetGlobalFloat(GScaleHeightR, hR);
-            Shader.SetGlobalFloat(GScaleHeightM, Mathf.Max(1f, hM));
-            Shader.SetGlobalFloat(GHasAtmosphere, hasAir ? 1f : 0f);
+            // ---- this planet's surface material ----
+            if (surfaceMaterial != null)
+            {
+                Color sun = system.StarLightColor;
+                surfaceMaterial.SetVector(SSunDir, sunDir);
+                surfaceMaterial.SetVector(SSunColor, new Vector4(sun.r, sun.g, sun.b, 0f));
+                surfaceMaterial.SetVector(SPlanetCenter, center);
+                surfaceMaterial.SetFloat(SPlanetRadius, (float)model.Radius * scale);
+                surfaceMaterial.SetFloat(SRenderScale, scale);
+                surfaceMaterial.SetVector(SBetaRayleigh, rayleigh);
+                surfaceMaterial.SetFloat(SMieExtinction, mieExt);
+                surfaceMaterial.SetFloat(SScaleHeightR, hR);
+                surfaceMaterial.SetFloat(SScaleHeightM, hM);
+                surfaceMaterial.SetFloat(SHasAtmosphere, hasAir ? 1f : 0f);
+                surfaceMaterial.SetVector(SSkyAmbient, system.SkyAmbient);
+            }
 
             meshRenderer.enabled = hasAir;
             if (!hasAir) return;
 
             double R = model.Radius;
             double shell = planet.VisualShellHeight;
-            transform.SetPositionAndRotation(planet.UnityCenter(origin), Quaternion.identity);
-            transform.localScale = Vector3.one * (float)((R + shell) * ShellInflation);
+            transform.SetPositionAndRotation(center, Quaternion.identity);
+            transform.localScale = Vector3.one * (float)((R + shell) * ShellInflation * scale);
 
             Vector3d camRel = origin.ViewerPosition - model.Position;
+            bool haze = optics.HasHaze;
+            Vector3d bh = haze ? optics.hazeScattering : Vector3d.Zero;
             material.SetVector(CameraPlanetPos, CoordinateSystem.ToUnityVector(camRel));
             material.SetFloat(CameraHeight, (float)(camRel.Magnitude - R));
             material.SetFloat(PlanetRadius, (float)R);
@@ -118,14 +148,18 @@ namespace SpaceSim.Runtime
             material.SetFloat(BetaMie, (float)optics.mieScattering);
             material.SetFloat(MieExtinction, mieExt);
             material.SetFloat(ScaleHeightR, hR);
-            material.SetFloat(ScaleHeightM, Mathf.Max(1f, hM));
+            material.SetFloat(ScaleHeightM, hM);
             material.SetFloat(MieG, (float)optics.mieAnisotropy);
-            material.SetVector(SunDir, sun.SunDirectionUnity);
+            material.SetVector(SunDir, sunDir);
             material.SetFloat(SunIntensity, def.atmosphereRendering.sunIntensity);
             material.SetFloat(Exposure, def.atmosphereRendering.exposure);
             material.SetFloat(ViewSamples, def.atmosphereRendering.viewSamples);
             material.SetFloat(LightSamples, def.atmosphereRendering.lightSamples);
             material.SetFloat(UseDepth, 1f);
+            material.SetFloat(RenderScale, scale);
+            material.SetVector(HazeScattering, new Vector4((float)bh.x, (float)bh.y, (float)bh.z, 0f));
+            material.SetFloat(HazeAltitude, (float)optics.hazeAltitude);
+            material.SetFloat(HazeThickness, Mathf.Max(1f, (float)optics.hazeThickness));
         }
     }
 }

@@ -2,20 +2,21 @@
 #define SPACESIM_LIGHTING_INCLUDED
 
 // Shared, pipeline-independent lighting helpers (plain HLSL, no pipeline includes).
-// Globals are set every frame by SolarLightingController / AtmosphereRenderer.
+// The including shader must declare these per-material uniforms first (set every frame by AtmosphereRenderer,
+// one material per planet — each planet sees the star from its own direction):
+//   float3 _SpaceSimSunDir;         unit vector towards the star (Unity world space)
+//   float3 _SpaceSimSunColor;       unattenuated starlight (linear)
+//   float3 _SpaceSimPlanetCenter;   planet centre (Unity world space, origin-relative, scaled)
+//   float  _SpaceSimPlanetRadius;   reference radius × render scale [Unity units]
+//   float  _SpaceSimRenderScale;    1 = true size; < 1 for distant bodies drawn in scaled space
+//   float3 _SpaceSimBetaRayleigh;   Rayleigh scattering at the surface [1/m]
+//   float  _SpaceSimMieExtinction;  Mie extinction at the surface [1/m]
+//   float  _SpaceSimScaleHeightR;   [m]
+//   float  _SpaceSimScaleHeightM;   [m]
+//   float  _SpaceSimHasAtmosphere;  0 or 1
+//   float3 _SpaceSimSkyAmbient;     ambient sky light colour at full daylight
 
-float3 _SpaceSimSunDir;          // unit vector towards the Sun (Unity world space)
-float3 _SpaceSimSunColor;        // unattenuated sunlight (linear)
-float3 _SpaceSimPlanetCenter;    // planet centre (Unity world space, origin-relative)
-float  _SpaceSimPlanetRadius;    // reference radius [m]
-float3 _SpaceSimBetaRayleigh;    // Rayleigh scattering at the surface [1/m]
-float  _SpaceSimMieExtinction;   // Mie extinction at the surface [1/m]
-float  _SpaceSimScaleHeightR;    // [m]
-float  _SpaceSimScaleHeightM;    // [m]
-float  _SpaceSimHasAtmosphere;   // 0 or 1
-float3 _SpaceSimSkyAmbient;      // ambient sky light colour at full daylight
-
-// Relative air mass along the direction to the Sun (Kasten & Young 1989), valid up to ~96° zenith.
+// Relative air mass along the direction to the star (Kasten & Young 1989), valid up to ~96° zenith.
 float SpaceSimAirMass(float cosZenith)
 {
     float zDeg = degrees(acos(clamp(cosZenith, -0.1, 1.0)));
@@ -23,7 +24,7 @@ float SpaceSimAirMass(float cosZenith)
     return 1.0 / (max(cosZenith, -0.1) + 0.50572 * pow(96.07995 - zDeg, -1.6364));
 }
 
-// Spectral transmittance of sunlight reaching a point at height h whose local "up" makes cosZenith with the Sun.
+// Spectral transmittance of starlight reaching a point at height h whose local "up" makes cosZenith with the star.
 float3 SpaceSimSunTransmittance(float h, float cosZenith)
 {
     if (_SpaceSimHasAtmosphere < 0.5) return float3(1, 1, 1);
@@ -49,20 +50,20 @@ float3 SpaceSimShadeSurface(float3 positionWS, float3 normalWS, float3 albedoSRG
     float3 albedo = SpaceSimToLinear(albedoSRGB);
     float3 toCenter = positionWS - _SpaceSimPlanetCenter;
     float r = length(toCenter);
-    float3 up = toCenter / max(r, 1e-3);
-    float h = r - _SpaceSimPlanetRadius;
+    float3 up = toCenter / max(r, 1e-6);
+    float h = (r - _SpaceSimPlanetRadius) / max(_SpaceSimRenderScale, 1e-12); // metres, independent of scale
     float3 L = _SpaceSimSunDir;
     float cosZ = dot(up, L);
 
     float3 sun = _SpaceSimSunColor * SpaceSimSunTransmittance(h, cosZ);
-    // Geometric terminator: the Sun sets below the local horizon of the sphere.
+    // Geometric terminator: the star sets below the local horizon of the sphere.
     float sunVisible = smoothstep(-0.015, 0.015, cosZ);
 
     float3 N = normalize(lerp(normalWS, up, waterMask * 0.85));
     float ndl = saturate(dot(N, L));
     float3 diffuse = albedo * sun * ndl * sunVisible * shadow;
 
-    // Sky light: scales with how much of the sky above is sunlit (crude, visual only).
+    // Sky light: scales with how much of the sky above is lit (crude, visual only).
     float skyDay = saturate(cosZ * 2.5 + 0.25) * _SpaceSimHasAtmosphere;
     float3 ambient = albedo * (_SpaceSimSkyAmbient * skyDay * saturate(0.5 + 0.5 * dot(normalWS, up)) + ambientFloor);
 

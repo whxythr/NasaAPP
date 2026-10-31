@@ -145,6 +145,7 @@ namespace SpaceSim.Runtime
             }
 
             Quaternion rotation = planet.UnityRotation(renderTime);
+            Vector3 scale = Vector3.one * (float)planet.RenderScale;
             for (int i = 0; i < displayed.Count; i++)
             {
                 Node n = displayed[i];
@@ -152,7 +153,8 @@ namespace SpaceSim.Runtime
                 n.View.Go.SetActive(visible);
                 if (!visible) continue;
                 Transform t = n.View.Go.transform;
-                t.SetPositionAndRotation(origin.ToUnityPosition(planet.Model.ToInertial(n.Data.Center, renderTime)), rotation);
+                t.SetPositionAndRotation(planet.ToUnity(origin, planet.Model.ToInertial(n.Data.Center, renderTime)), rotation);
+                t.localScale = scale;
             }
 
             StartJobs();

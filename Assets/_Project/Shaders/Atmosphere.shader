@@ -49,6 +49,10 @@ Shader "SpaceSim/Atmosphere"
             float  _ViewSamples;
             float  _LightSamples;
             float  _UseDepth;
+            float  _RenderScale;       // 1 = true size; < 1 when the body is drawn in scaled space
+            float3 _HazeScattering;    // high haze layer [1/m] at its peak
+            float  _HazeAltitude;      // [m]
+            float  _HazeThickness;     // [m] (> 0)
 
             struct v2f
             {
@@ -115,7 +119,8 @@ Shader "SpaceSim/Atmosphere"
                     {
                         float eye = LinearEyeDepth(raw);
                         float3 camForward = -UNITY_MATRIX_V[2].xyz;
-                        float dist = eye / max(dot(d, camForward), 1e-4);
+                        // Depth is in (possibly scaled) Unity units; the ray march works in metres.
+                        float dist = eye / max(dot(d, camForward), 1e-4) / max(_RenderScale, 1e-12);
                         t1 = min(t1, dist);
                     }
                 }
@@ -126,8 +131,10 @@ Shader "SpaceSim/Atmosphere"
                 float ds = (t1 - t0) / viewSteps;
                 float3 sumR = 0;
                 float3 sumM = 0;
+                float3 sumH = 0;
                 float odR = 0;
                 float odM = 0;
+                float odH = 0;
                 float3 L = _SunDir;
 
                 [loop]
@@ -137,8 +144,11 @@ Shader "SpaceSim/Atmosphere"
                     float hp = length(p) - R;
                     float dR = exp(-hp / _ScaleHeightR) * ds;
                     float dM = exp(-hp / _ScaleHeightM) * ds;
+                    float zh = (hp - _HazeAltitude) / _HazeThickness;
+                    float dH = exp(-zh * zh) * ds;
                     odR += dR;
                     odM += dM;
+                    odH += dH;
 
                     // Is the Sun hidden by the planet from p?
                     float bl = dot(p, L);
@@ -150,23 +160,28 @@ Shader "SpaceSim/Atmosphere"
                     float dsl = tl / lightSteps;
                     float lR = 0;
                     float lM = 0;
+                    float lH = 0;
                     [loop]
                     for (int k = 0; k < lightSteps; k++)
                     {
                         float3 q = p + L * ((k + 0.5) * dsl);
                         float hq = length(q) - R;
+                        float zq = (hq - _HazeAltitude) / _HazeThickness;
                         lR += exp(-hq / _ScaleHeightR) * dsl;
                         lM += exp(-hq / _ScaleHeightM) * dsl;
+                        lH += exp(-zq * zq) * dsl;
                     }
-                    float3 tau = _BetaRayleigh * (odR + lR) + _MieExtinction * (odM + lM);
+                    float3 tau = _BetaRayleigh * (odR + lR) + _MieExtinction * (odM + lM) + _HazeScattering * (odH + lH);
                     float3 att = exp(-tau);
                     sumR += att * dR;
                     sumM += att * dM;
+                    sumH += att * dH;
                 }
 
                 float mu = dot(d, L);
-                float3 inscatter = _SunIntensity * (sumR * _BetaRayleigh * PhaseRayleigh(mu) + sumM * _BetaMie * PhaseMie(mu, _MieG));
-                float3 transmittance = exp(-(_BetaRayleigh * odR + _MieExtinction * odM));
+                float3 inscatter = _SunIntensity * ((sumR * _BetaRayleigh + sumH * _HazeScattering) * PhaseRayleigh(mu)
+                                                    + sumM * _BetaMie * PhaseMie(mu, _MieG));
+                float3 transmittance = exp(-(_BetaRayleigh * odR + _MieExtinction * odM + _HazeScattering * odH));
 
                 float3 color = 1.0 - exp(-inscatter * _Exposure);
                 float alpha = dot(transmittance, float3(0.3333, 0.3333, 0.3334));

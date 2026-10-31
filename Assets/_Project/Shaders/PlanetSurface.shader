@@ -1,18 +1,51 @@
-// Terrain/ocean surface of a planet. Albedo comes from vertex colours (procedural biomes), alpha = water mask.
-// Sunlight is attenuated per pixel by the atmosphere (air mass), the night side is unlit by geometry, and URP
+// Terrain/ocean surface of a planet or moon. Albedo comes from vertex colours (procedural biomes), alpha = water mask.
+// Starlight is attenuated per pixel by the atmosphere (air mass), the night side is unlit by geometry, and URP
 // real-time shadows are applied near the camera. Aerial perspective is added afterwards by the atmosphere pass.
+// Every planet has its own material: star direction, centre, radius and scattering are per-material values.
 Shader "SpaceSim/PlanetSurface"
 {
     Properties
     {
         _AmbientFloor ("Ambient floor (night)", Range(0, 0.05)) = 0.004
         _WaterSpecular ("Water specular", Range(0, 2)) = 1.0
+        [HideInInspector] _SpaceSimSunDir ("Sun direction", Vector) = (1, 0, 0, 0)
+        [HideInInspector] _SpaceSimSunColor ("Sun colour", Vector) = (1, 1, 1, 0)
+        [HideInInspector] _SpaceSimPlanetCenter ("Planet centre", Vector) = (0, 0, 0, 0)
+        [HideInInspector] _SpaceSimPlanetRadius ("Planet radius", Float) = 6371000
+        [HideInInspector] _SpaceSimRenderScale ("Render scale", Float) = 1
+        [HideInInspector] _SpaceSimBetaRayleigh ("Rayleigh", Vector) = (0, 0, 0, 0)
+        [HideInInspector] _SpaceSimMieExtinction ("Mie extinction", Float) = 0
+        [HideInInspector] _SpaceSimScaleHeightR ("H Rayleigh", Float) = 8500
+        [HideInInspector] _SpaceSimScaleHeightM ("H Mie", Float) = 1200
+        [HideInInspector] _SpaceSimHasAtmosphere ("Has atmosphere", Float) = 0
+        [HideInInspector] _SpaceSimSkyAmbient ("Sky ambient", Vector) = (0, 0, 0, 0)
     }
 
     // ---------------- Universal Render Pipeline ----------------
     SubShader
     {
         Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" "Queue" = "Geometry" }
+
+        HLSLINCLUDE
+        #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+        // Shadows.hlsl (ShadowCaster pass) uses LerpWhiteTo from CommonMaterial.hlsl, which Core.hlsl does not include.
+        #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/CommonMaterial.hlsl"
+        CBUFFER_START(UnityPerMaterial)
+            float _AmbientFloor;
+            float _WaterSpecular;
+            float3 _SpaceSimSunDir;
+            float3 _SpaceSimSunColor;
+            float3 _SpaceSimPlanetCenter;
+            float _SpaceSimPlanetRadius;
+            float _SpaceSimRenderScale;
+            float3 _SpaceSimBetaRayleigh;
+            float _SpaceSimMieExtinction;
+            float _SpaceSimScaleHeightR;
+            float _SpaceSimScaleHeightM;
+            float _SpaceSimHasAtmosphere;
+            float3 _SpaceSimSkyAmbient;
+        CBUFFER_END
+        ENDHLSL
 
         Pass
         {
@@ -27,14 +60,8 @@ Shader "SpaceSim/PlanetSurface"
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
 
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "SpaceSimLighting.hlsl"
-
-            CBUFFER_START(UnityPerMaterial)
-                float _AmbientFloor;
-                float _WaterSpecular;
-            CBUFFER_END
 
             struct Attributes
             {
@@ -88,7 +115,6 @@ Shader "SpaceSim/PlanetSurface"
             #pragma fragment ShadowFrag
             #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
 
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
 
             float3 _LightDirection;
@@ -133,7 +159,6 @@ Shader "SpaceSim/PlanetSurface"
             HLSLPROGRAM
             #pragma vertex DepthVert
             #pragma fragment DepthFrag
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
             float4 DepthVert(float4 positionOS : POSITION) : SV_POSITION { return TransformObjectToHClip(positionOS.xyz); }
             half DepthFrag() : SV_Target { return 0; }
@@ -155,10 +180,22 @@ Shader "SpaceSim/PlanetSurface"
             #pragma vertex vert
             #pragma fragment frag
             #include "UnityCG.cginc"
-            #include "SpaceSimLighting.hlsl"
 
             float _AmbientFloor;
             float _WaterSpecular;
+            float3 _SpaceSimSunDir;
+            float3 _SpaceSimSunColor;
+            float3 _SpaceSimPlanetCenter;
+            float _SpaceSimPlanetRadius;
+            float _SpaceSimRenderScale;
+            float3 _SpaceSimBetaRayleigh;
+            float _SpaceSimMieExtinction;
+            float _SpaceSimScaleHeightR;
+            float _SpaceSimScaleHeightM;
+            float _SpaceSimHasAtmosphere;
+            float3 _SpaceSimSkyAmbient;
+
+            #include "SpaceSimLighting.hlsl"
 
             struct v2f
             {

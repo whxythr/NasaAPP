@@ -22,6 +22,16 @@ namespace SpaceSim.Physics
         /// <summary>Henyey–Greenstein anisotropy g (0 = isotropic, →1 = strongly forward).</summary>
         public double mieAnisotropy = 0.8;
 
+        /// <summary>
+        /// Optional high haze layer (e.g. organic/photochemical haze seen as a coloured rim from space) [1/m] at its
+        /// peak. Density profile exp(−((h − altitude)/thickness)²). Zero = no haze.
+        /// </summary>
+        public Vector3d hazeScattering = Vector3d.Zero;
+        public double hazeAltitude = 70000.0;
+        public double hazeThickness = 8000.0;
+
+        public bool HasHaze => hazeThickness > 0.0 && (hazeScattering.x > 0.0 || hazeScattering.y > 0.0 || hazeScattering.z > 0.0);
+
         /// <summary>When true the visual shell height is derived from the density profile.</summary>
         public bool autoShellHeight = true;
         /// <summary>Density ratio ρ/ρ₀ at which the visual shell ends (auto mode). Beyond it scattering is invisible.</summary>
@@ -43,7 +53,8 @@ namespace SpaceSim.Physics
         public static double VisualShellHeight(IAtmosphereProfile profile, AtmosphereOpticalProperties optics)
         {
             if (profile == null || profile.ReferenceDensity <= 0.0) return 0.0;
-            if (!optics.autoShellHeight) return Math.Max(0.0, optics.shellHeight);
+            double hazeTop = optics.HasHaze ? optics.hazeAltitude + 3.0 * optics.hazeThickness : 0.0;
+            if (!optics.autoShellHeight) return Math.Max(Math.Max(0.0, optics.shellHeight), hazeTop);
             double target = profile.ReferenceDensity * optics.shellDensityRatio;
             double lo = 0.0, hi = 1000.0;
             while (profile.Density(hi) > target && hi < 1.0e8) hi *= 2.0;
@@ -52,7 +63,7 @@ namespace SpaceSim.Physics
                 double mid = 0.5 * (lo + hi);
                 if (profile.Density(mid) > target) lo = mid; else hi = mid;
             }
-            return hi;
+            return Math.Max(hi, hazeTop);
         }
 
         /// <summary>
@@ -70,22 +81,29 @@ namespace SpaceSim.Physics
             t0 = Math.Max(0.0, t0);
 
             double ds = (t1 - t0) / steps;
-            double rayleighDepth = 0.0, mieDepth = 0.0;
+            double rayleighDepth = 0.0, mieDepth = 0.0, hazeDepth = 0.0;
             double invRho0 = 1.0 / profile.ReferenceDensity;
+            bool haze = optics.HasHaze;
             for (int i = 0; i < steps; i++)
             {
                 Vector3d p = origin + d * (t0 + (i + 0.5) * ds);
                 double h = p.Magnitude - planetRadius;
                 rayleighDepth += profile.Density(h) * invRho0 * ds;
                 mieDepth += Math.Exp(-h / optics.mieScaleHeight) * ds;
+                if (haze)
+                {
+                    double z = (h - optics.hazeAltitude) / optics.hazeThickness;
+                    hazeDepth += Math.Exp(-z * z) * ds;
+                }
             }
 
             Vector3d br = optics.rayleighScattering;
+            Vector3d bh = optics.hazeScattering;
             double bm = optics.mieScattering * optics.mieExtinctionRatio;
             return new Vector3d(
-                Math.Exp(-(br.x * rayleighDepth + bm * mieDepth)),
-                Math.Exp(-(br.y * rayleighDepth + bm * mieDepth)),
-                Math.Exp(-(br.z * rayleighDepth + bm * mieDepth)));
+                Math.Exp(-(br.x * rayleighDepth + bm * mieDepth + bh.x * hazeDepth)),
+                Math.Exp(-(br.y * rayleighDepth + bm * mieDepth + bh.y * hazeDepth)),
+                Math.Exp(-(br.z * rayleighDepth + bm * mieDepth + bh.z * hazeDepth)));
         }
 
         /// <summary>Ray–sphere intersection (sphere centred at the origin). Returns false if missed.</summary>

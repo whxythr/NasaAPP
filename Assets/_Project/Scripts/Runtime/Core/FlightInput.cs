@@ -7,7 +7,8 @@ namespace SpaceSim.Runtime
 {
     public enum InputKey
     {
-        M, I, U, O, R, H, P, C, F, G, Comma, Period, Tab, Escape, Equals, Minus, F1
+        M, I, U, O, R, H, P, C, F, G, J, N, Comma, Period, Tab, Escape, Equals, Minus, F1,
+        W, A, S, D, Z, X, Space, LeftShift, LeftCtrl, Return
     }
 
     /// <summary>
@@ -130,6 +131,18 @@ namespace SpaceSim.Runtime
                 case InputKey.C: return Key.C;
                 case InputKey.F: return Key.F;
                 case InputKey.G: return Key.G;
+                case InputKey.J: return Key.J;
+                case InputKey.N: return Key.N;
+                case InputKey.W: return Key.W;
+                case InputKey.A: return Key.A;
+                case InputKey.S: return Key.S;
+                case InputKey.D: return Key.D;
+                case InputKey.Z: return Key.Z;
+                case InputKey.X: return Key.X;
+                case InputKey.Space: return Key.Space;
+                case InputKey.LeftShift: return Key.LeftShift;
+                case InputKey.LeftCtrl: return Key.LeftCtrl;
+                case InputKey.Return: return Key.Enter;
                 case InputKey.Comma: return Key.Comma;
                 case InputKey.Period: return Key.Period;
                 case InputKey.Tab: return Key.Tab;
@@ -156,6 +169,18 @@ namespace SpaceSim.Runtime
                 case InputKey.C: return KeyCode.C;
                 case InputKey.F: return KeyCode.F;
                 case InputKey.G: return KeyCode.G;
+                case InputKey.J: return KeyCode.J;
+                case InputKey.N: return KeyCode.N;
+                case InputKey.W: return KeyCode.W;
+                case InputKey.A: return KeyCode.A;
+                case InputKey.S: return KeyCode.S;
+                case InputKey.D: return KeyCode.D;
+                case InputKey.Z: return KeyCode.Z;
+                case InputKey.X: return KeyCode.X;
+                case InputKey.Space: return KeyCode.Space;
+                case InputKey.LeftShift: return KeyCode.LeftShift;
+                case InputKey.LeftCtrl: return KeyCode.LeftControl;
+                case InputKey.Return: return KeyCode.Return;
                 case InputKey.Comma: return KeyCode.Comma;
                 case InputKey.Period: return KeyCode.Period;
                 case InputKey.Tab: return KeyCode.Tab;

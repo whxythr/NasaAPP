@@ -1,0 +1,212 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f67f3db8e82744378f4cdddb7a7408f0, type: 3}
+  m_Name: quoris
+  m_EditorClassIdentifier: 
+  planetId: quoris
+  displayName: "\u041A\u0432\u0430\u0440\u0438\u0441 (Quoris)"
+  physical:
+    meanRadius: 1175730
+    mass: 2.82e+22
+    gravitySource: 0
+    measuredGravitationalParameter: 1882152599999.9998
+    siderealRotationPeriod: 898560
+    axialTiltDegrees: 0
+    rotationPhaseAtEpochDegrees: 310
+    atmosphere:
+      hasAtmosphere: 1
+      profile: 0
+      surfaceDensity: 0.0008512032204883705
+      scaleHeight: 86283.37207208596
+      surfacePressure: 100
+      surfaceTemperature: 452.15
+      meanMolarMass: 0.032
+      coRotationFactor: 1
+      table: []
+    spaceBoundaryAltitude: 100000
+  physicalGeneratorVersion: 0
+  physicalSeed: 0
+  surfaceSource: 0
+  generation:
+    seed: 72244
+    algorithmVersion: 1
+    continentFrequency: 1.2
+    continentOctaves: 6
+    lacunarity: 2
+    persistence: 0.5
+    continentBias: -0.04
+    continentAmplitude: 2000
+    oceanDepthAmplitude: 3000
+    warpFrequency: 1.6
+    warpStrength: 0.2
+    mountainFrequency: 4.5
+    mountainOctaves: 7
+    mountainAmplitude: 3500
+    detailFrequency: 120
+    detailOctaves: 9
+    detailAmplitude: 100
+    hasOcean: 0
+    seaLevel: 0
+    craterCount: 140
+    craterMinRadius: 4000
+    craterMaxRadius: 110000
+    craterDepthRatio: 0.14
+    craterRimWidth: 0.45
+    elevationCooling: 0.00008
+    moistureFrequency: 2.4
+    deepOcean:
+      r: 0.015
+      g: 0.05
+      b: 0.16
+    shallowOcean:
+      r: 0.04
+      g: 0.17
+      b: 0.3
+    seaIce:
+      r: 0.8
+      g: 0.85
+      b: 0.9
+    beach:
+      r: 0.72
+      g: 0.66
+      b: 0.48
+    desert:
+      r: 0.76
+      g: 0.63
+      b: 0.42
+    grassland:
+      r: 0.28
+      g: 0.4
+      b: 0.16
+    forest:
+      r: 0.11
+      g: 0.24
+      b: 0.09
+    tundra:
+      r: 0.42
+      g: 0.41
+      b: 0.35
+    rock:
+      r: 0.36
+      g: 0.33
+      b: 0.3
+    snow:
+      r: 0.9
+      g: 0.92
+      b: 0.95
+    atmosphereTint:
+      r: 1
+      g: 1
+      b: 1
+    cloudCoverage: 0.45
+    flattenZones:
+    - latitudeDegrees: 4
+      longitudeDegrees: -37.5
+      radius: 600
+      minHeightAboveSeaLevel: 15
+    equatorialAridity: 0
+    coastalMountainBoost: 0
+    surfaceStyle: 1
+    lowland:
+      r: 0.56
+      g: 0.5
+      b: 0.48
+    highland:
+      r: 0.66
+      g: 0.6
+      b: 0.56
+    stain:
+      r: 0.55
+      g: 0.16
+      b: 0.09
+    stainCoverage: 0.32
+    stainFrequency: 5
+    craterFloorDarkening: 0.2
+    featureCraters:
+    - latitudeDegrees: -16
+      longitudeDegrees: -27
+      radius: 65000
+      depthRatio: 0.35
+    - latitudeDegrees: -16
+      longitudeDegrees: -21
+      radius: 65000
+      depthRatio: 0.35
+    - latitudeDegrees: -21
+      longitudeDegrees: -24
+      radius: 42000
+      depthRatio: 0.35
+  lod:
+    chunkResolution: 32
+    maxLevel: 14
+    splitDistanceFactor: 2.2
+    useWorkerThreads: 1
+    maxConcurrentJobs: 6
+    maxMeshUploadsPerFrame: 8
+    cacheBudgetMegabytes: 256
+    skirtFraction: 0.015
+  importedModel:
+    modelPrefab: {fileID: 0}
+    modelRadius: 1
+    rotationOffsetEuler: {x: 0, y: 0, z: 0}
+  optics:
+    rayleighScattering:
+      x: 0.000000004031576396141653
+      y: 0.000000009420908786433735
+      z: 0.00000002299985844748168
+    mieScattering: 0
+    mieExtinctionRatio: 1.11
+    mieScaleHeight: 1200
+    mieAnisotropy: 0.8
+    hazeScattering:
+      x: 0
+      y: 0
+      z: 0
+    hazeAltitude: 70000
+    hazeThickness: 8000
+    autoShellHeight: 0
+    shellDensityRatio: 0.000001
+    shellHeight: 345133.4882883438
+  atmosphereRendering:
+    enabled: 1
+    sunIntensity: 22
+    exposure: 1
+    viewSamples: 16
+    lightSamples: 8
+  launchSite:
+    name: "\u041F\u043B\u043E\u0449\u0430\u0434\u043A\u0430 \xB7 \u041A\u0432\u0430\u0440\u0438\u0441
+      (Quoris)"
+    latitudeDegrees: 4
+    longitudeDegrees: -37.5
+    padRadius: 40
+    flattenRadius: 600
+    minHeightAboveSeaLevel: 15
+  parentBodyId: 
+  orbit:
+    semiMajorAxis: 19148527449.600002
+    eccentricity: 0
+    inclinationDegrees: 0
+    longitudeOfAscendingNodeDegrees: 0
+    argumentOfPeriapsisDegrees: 0
+    meanAnomalyAtEpochDegrees: 130
+    period: 898560
+    tidallyLocked: 1
+  description: "\u0421\u0430\u043C\u0430\u044F \u043C\u0430\u043B\u0430\u044F \u043F\u043B\u0430\u043D\u0435\u0442\u0430.
+    \u041F\u0440\u0438\u043B\u0438\u0432\u043D\u044B\u0439 \u0437\u0430\u0445\u0432\u0430\u0442:
+    \u0432\u0441\u0435\u0433\u0434\u0430 \u043F\u043E\u0432\u0451\u0440\u043D\u0443\u0442\u0430
+    \u043E\u0434\u043D\u043E\u0439 \u0441\u0442\u043E\u0440\u043E\u043D\u043E\u0439
+    \u043A \u0437\u0432\u0435\u0437\u0434\u0435 (\u22123 \xB0C \u2026 361 \xB0C).
+    \u041E\u0447\u0435\u043D\u044C \u0442\u043E\u043D\u043A\u0438\u0439 \u043A\u0438\u0441\u043B\u043E\u0440\u043E\u0434\u043D\u044B\u0439
+    \u0441\u043B\u043E\u0439, \u0440\u0436\u0430\u0432\u044B\u0435 \u043A\u0440\u0430\u0441\u043D\u044B\u0435
+    \u043F\u044F\u0442\u043D\u0430, \u043C\u0430\u0441\u0441\u0438\u0432\u043D\u044B\u0435
+    \u0433\u043B\u0443\u0431\u043E\u043A\u0438\u0435 \u043A\u0440\u0430\u0442\u0435\u0440\u044B
+    \u0438 \xAB\u0441\u0435\u0440\u0434\u0435\u0447\u043A\u043E\xBB."
+  flattenLaunchSite: 1

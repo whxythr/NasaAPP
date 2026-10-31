@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("UnityStubCheck")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8aedc4c9825534a3f526d83dc231c9ed8a1d0240")]
 [assembly: System.Reflection.AssemblyProductAttribute("UnityStubCheck")]
 [assembly: System.Reflection.AssemblyTitleAttribute("UnityStubCheck")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

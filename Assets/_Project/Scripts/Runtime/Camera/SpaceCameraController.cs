@@ -78,6 +78,14 @@ namespace SpaceSim.Runtime
 
         public void ToggleFrame() => frame = frame == ReferenceFrame.LocalHorizon ? ReferenceFrame.Inertial : ReferenceFrame.LocalHorizon;
 
+        /// <summary>Sets the orbit-camera view directly (yaw/pitch in degrees, distance in metres).</summary>
+        public void SetView(float yawDegrees, float pitchDegrees, double distanceMetres)
+        {
+            yaw = targetYaw = yawDegrees;
+            pitch = targetPitch = Mathf.Clamp(pitchDegrees, -89f, 89f);
+            distance = targetDistance = MathD.Clamp(distanceMetres, minDistance, maxDistance);
+        }
+
         public void ToggleFocus()
         {
             focus = focus == FocusTarget.FlightBody ? FocusTarget.Planet : FocusTarget.FlightBody;
@@ -91,7 +99,7 @@ namespace SpaceSim.Runtime
 
         void LateUpdate()
         {
-            if (planet == null || planet.Model == null || body == null) return;
+            if (planet == null || planet.Model == null || body == null || body.Simulation == null) return;
             float dt = Mathf.Max(Time.unscaledDeltaTime, 1e-4f);
             HandleInput();
 

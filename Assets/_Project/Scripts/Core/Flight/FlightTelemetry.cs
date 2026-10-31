@@ -36,6 +36,7 @@ namespace SpaceSim.Flight
         public Vector3d GravityAcceleration;
         public double GravityMagnitude;          // g(r) = μ/r²
         public double DragAcceleration;          // |a_drag|
+        public double ThrustAcceleration;        // |F_thrust| / m
         public double TotalAcceleration;         // |a_total| (proper + gravitational)
         public double ProperAcceleration;        // |a_total − a_gravity| = what an accelerometer reads
 
@@ -100,15 +101,18 @@ namespace SpaceSim.Flight
                 Vector3d centripetal = -Vector3d.Cross(planet.Rotation.AngularVelocity,
                     Vector3d.Cross(planet.Rotation.AngularVelocity, rel));
                 t.DragAcceleration = 0.0;
+                t.ThrustAcceleration = 0.0;
                 t.TotalAcceleration = centripetal.Magnitude;
                 t.ProperAcceleration = (centripetal - t.GravityAcceleration).Magnitude;
             }
             else
             {
                 Vector3d aDrag = sim.DragAcceleration(s.Position, s.Velocity);
+                Vector3d aThrust = sim.ThrustAcceleration(s.Position);
                 t.DragAcceleration = aDrag.Magnitude;
-                t.TotalAcceleration = (t.GravityAcceleration + aDrag).Magnitude;
-                t.ProperAcceleration = t.DragAcceleration;
+                t.ThrustAcceleration = aThrust.Magnitude;
+                t.TotalAcceleration = (t.GravityAcceleration + aDrag + aThrust).Magnitude;
+                t.ProperAcceleration = (aDrag + aThrust).Magnitude;
             }
 
             double h = t.AltitudeAboveReference;

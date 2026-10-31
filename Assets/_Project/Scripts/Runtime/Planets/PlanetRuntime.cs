@@ -109,7 +109,8 @@ namespace SpaceSim.Runtime
 
             ISurfaceHeightProvider surface = Sampler != null ? Sampler : (ISurfaceHeightProvider)ReferenceSphereSurface.Instance;
             var oldModel = Model;
-            Model = new PlanetModel(definition.displayName, definition.physical, surface, Vector3d.Zero);
+            // Keep the current place in the system (non-active bodies are moved along their orbits every frame).
+            Model = new PlanetModel(definition.displayName, definition.physical, surface, oldModel != null ? oldModel.Position : Vector3d.Zero);
             VisualShellHeight = AtmosphereOptics.VisualShellHeight(Model.Atmosphere, definition.optics);
             LastError = null;
 
@@ -121,8 +122,31 @@ namespace SpaceSim.Runtime
             ModelChanged?.Invoke(Model);
         }
 
+        /// <summary>
+        /// Uniform scale about the camera used to draw this body (1 = true size and distance). Bodies farther than
+        /// the camera's far plane are drawn proportionally closer and smaller ("scaled space"): the angular size and
+        /// direction are exact, depth precision stays usable. Purely visual.
+        /// </summary>
+        public double RenderScale { get; set; } = 1.0;
+
+        /// <summary>Moves this planet's gravity into another field (only the active body acts on the probe).</summary>
+        public void SetGravityField(GravityField field)
+        {
+            if (gravityField != null && Model != null) gravityField.Remove(Model.Gravity);
+            gravityField = field;
+            if (gravityField != null && Model != null) gravityField.Add(Model.Gravity);
+        }
+
+        /// <summary>Unity position of a simulation-frame point belonging to this body (applies <see cref="RenderScale"/>).</summary>
+        public Vector3 ToUnity(FloatingOrigin origin, Vector3d simulationPosition)
+        {
+            if (RenderScale >= 1.0) return origin.ToUnityPosition(simulationPosition);
+            Vector3d viewer = origin.ViewerPosition;
+            return origin.ToUnityPosition(viewer + (simulationPosition - viewer) * RenderScale);
+        }
+
         /// <summary>Planet centre in Unity space for the current floating origin.</summary>
-        public Vector3 UnityCenter(FloatingOrigin origin) => origin.ToUnityPosition(Model.Position);
+        public Vector3 UnityCenter(FloatingOrigin origin) => ToUnity(origin, Model.Position);
 
         /// <summary>Planet-fixed → Unity world rotation at <paramref name="time"/>.</summary>
         public Quaternion UnityRotation(double time) => CoordinateSystem.ToUnityRotation(Model.Rotation.Orientation(time));
