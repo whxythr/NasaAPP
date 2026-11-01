@@ -31,6 +31,38 @@ namespace SpaceSim.Editor
             ConfigurePlayer();
             ConfigureUrp();
             CreatePhase1Scene(EnsureHomeSystemAssets());
+            CreateMainMenuScene();
+        }
+
+        const string MainMenuScenePath = Root + "/Scenes/MainMenu.unity";
+
+        /// <summary>Main menu scene (UI Toolkit, <see cref="SpaceSim.Runtime.Menu.MainMenuController"/>), first in Build Settings.</summary>
+        [MenuItem("SpaceSim/Create Main Menu Scene", priority = 42)]
+        public static void CreateMainMenuScene()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                EditorUtility.DisplayDialog("SpaceSim", "Остановите Play mode. / Stop Play mode first.", "OK");
+                return;
+            }
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+            // UI Toolkit draws on its own; the camera only clears the screen (and silences "No cameras rendering").
+            var cam = new GameObject("MenuCamera") { tag = "MainCamera" }.AddComponent<Camera>();
+            cam.clearFlags = CameraClearFlags.SolidColor;
+            cam.backgroundColor = Color.black;
+            cam.cullingMask = 0;
+
+            new GameObject("MainMenu").AddComponent<SpaceSim.Runtime.Menu.MainMenuController>();
+
+            Directory.CreateDirectory(Path.GetDirectoryName(MainMenuScenePath));
+            EditorSceneManager.SaveScene(scene, MainMenuScenePath);
+            var scenes = new System.Collections.Generic.List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
+            scenes.RemoveAll(s => s.path == MainMenuScenePath);
+            scenes.Insert(0, new EditorBuildSettingsScene(MainMenuScenePath, true));
+            EditorBuildSettings.scenes = scenes.ToArray();
+            Debug.Log("[SpaceSim] Scene created: " + MainMenuScenePath + " — press Play.");
         }
 
         const string HomeSystemDir = Root + "/ScriptableObjects/StarSystems/Home";
