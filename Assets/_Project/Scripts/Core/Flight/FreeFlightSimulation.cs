@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using SpaceSim.Mathematics;
 using SpaceSim.Physics;
 using SpaceSim.Planets;
@@ -63,7 +64,15 @@ namespace SpaceSim.Flight
         /// <summary>Distance from the body's reference point to the ground when resting [m].</summary>
         public double ContactRadius = 1.0;
 
+        /// <summary>Integrator for unpowered (conservative) flight: symplectic Velocity Verlet keeps orbits stable.</summary>
         public IntegrationMethod Method = IntegrationMethod.VelocityVerlet;
+        /// <summary>Integrator while an engine burns: thrust is non-conservative and attitude/time dependent → RK4.</summary>
+        public IntegrationMethod PoweredMethod = IntegrationMethod.RungeKutta4;
+
+        /// <summary>Level B statistics of the current flight (losses, maxima, distance).</summary>
+        public FlightRecorder Recorder { get; } = new FlightRecorder();
+
+        IntegrationMethod ActiveMethod => Rocket != null && Rocket.IsBurning ? PoweredMethod : Method;
         /// <summary>η in Δt ≤ η·√(r³/μ). 0.002 ≈ 3100 steps per orbit — far finer than needed in LEO with Δt = 0.02 s.</summary>
         public double AccuracyFactor = 0.002;
         /// <summary>Drag stiffness limit: Δt ≤ k·v/|a_drag|.</summary>
@@ -84,7 +93,99 @@ namespace SpaceSim.Flight
         // ---- IAccelerationModel -------------------------------------------------------------
 
         public Vector3d Acceleration(double time, Vector3d position, Vector3d velocity) =>
-            Gravity.AccelerationAt(position) + DragAcceleration(position, velocity) + ThrustAcceleration(position);
+            GravityAcceleration(time, position) + DragAcceleration(position, velocity) + ThrustAcceleration(position);
+
+        // ---- Patched conics (interplanetary flight) -------------------------------------------
+
+        /// <summary>
+        /// Star system for patched-conic gravity and coasting; null = only <see cref="Gravity"/> (single-body tests).
+        /// The simulation frame is centred on body <see cref="FrameBody"/> of this system.
+        /// </summary>
+        public PatchedConicSystem Navigation { get; private set; }
+        /// <summary>Index (in <see cref="Navigation"/>) of the body the simulation frame is centred on.</summary>
+        public int FrameBody { get; private set; } = PatchedConicSystem.Star;
+        /// <summary>Body whose gravity acts now (smallest sphere of influence containing the vehicle; −1 = the star).</summary>
+        public int Primary { get; private set; } = PatchedConicSystem.Star;
+
+        public void SetNavigation(PatchedConicSystem system, int frameBody)
+        {
+            Navigation = system;
+            FrameBody = frameBody;
+            Primary = frameBody;
+            UpdatePrimary();
+        }
+
+        /// <summary>
+        /// Gravity at a point of the simulation frame [m/s²]. Inside the frame body's sphere of influence — its own field
+        /// (<see cref="Gravity"/>); elsewhere — the patched-conic primary plus the frame's own acceleration
+        /// (<see cref="PatchedConicSystem.GravityInFrame"/>).
+        /// </summary>
+        public Vector3d GravityAcceleration(double time, Vector3d position)
+        {
+            if (Navigation == null || FrameBody < 0 || Primary == FrameBody) return Gravity.AccelerationAt(position);
+            return Navigation.GravityInFrame(FrameBody, Primary, position, time);
+        }
+
+        void UpdatePrimary()
+        {
+            if (Navigation == null || FrameBody < 0) return;
+            Primary = IsLanded ? FrameBody : Navigation.PrimaryAt(State.Position + Navigation.Position(FrameBody, State.Time), State.Time, Primary);
+        }
+
+        CoastState ToCoast(BodyState s)
+        {
+            Vector3d r = s.Position, v = s.Velocity;
+            Navigation.Transform(FrameBody, Primary, s.Time, ref r, ref v);
+            return new CoastState(Primary, r, v, s.Time);
+        }
+
+        BodyState FromCoast(CoastState c)
+        {
+            Vector3d r = c.Position, v = c.Velocity;
+            Navigation.Transform(c.Primary, FrameBody, c.Time, ref r, ref v);
+            return new BodyState(r, v, c.Time);
+        }
+
+        /// <summary>Current state relative to the primary (for prediction and planning).</summary>
+        public CoastState CoastStateNow() => ToCoast(State);
+
+        /// <summary>
+        /// How long the vehicle can coast analytically ("on rails") [s] — 0 while the engine burns, inside an atmosphere or
+        /// near the ground. Resting on the ground is exact at any step.
+        /// </summary>
+        public double RailsHorizon(double maxDt)
+        {
+            if (Navigation == null || FrameBody < 0) return 0.0;
+            if (Rocket != null && Rocket.IsBurning) return 0.0;
+            if (IsLanded) return maxDt;
+            return Navigation.Horizon(ToCoast(State), maxDt);
+        }
+
+        /// <summary>
+        /// Coasts analytically by <paramref name="dt"/> with exact two-body motion around each primary (same physics as the
+        /// integrator, no drag — only used where drag is negligible). <paramref name="renderLag"/>: the previous state is
+        /// taken that much before the end, for smooth interpolation.
+        /// </summary>
+        public void RailsStep(double dt, double renderLag, List<PatchTransition> transitions = null)
+        {
+            if (IsLanded)
+            {
+                State = LandedState(State.Time + dt);
+                PreviousState = LandedState(State.Time - Math.Min(renderLag, dt));
+                LastSubstepCount = 0;
+                return;
+            }
+            double lag = Math.Min(renderLag, dt);
+            CoastState c = ToCoast(State);
+            Navigation.Coast(ref c, dt - lag, transitions);
+            Primary = c.Primary;
+            PreviousState = FromCoast(c);
+            Navigation.Coast(ref c, lag, transitions);
+            Primary = c.Primary;
+            State = FromCoast(c);
+            Recorder.RecordCoast(dt, State.Velocity.Magnitude, planet.AltitudeAboveSurface(State.Position, State.Time));
+            LastSubstepCount = 0;
+        }
 
         public Vector3d DragAcceleration(Vector3d position, Vector3d velocity)
         {
@@ -124,6 +225,23 @@ namespace SpaceSim.Flight
             return (up * cu + north * cn + east * ce).Normalized;
         }
 
+        /// <summary>
+        /// Pitch/heading [deg] that would point the thrust along <paramref name="direction"/> at <paramref name="position"/> — the
+        /// inverse of <see cref="ThrustDirection"/>. Display aid for manoeuvres; the player still steers.
+        /// </summary>
+        public void AttitudeFor(Vector3d direction, Vector3d position, out double pitchDegrees, out double headingDegrees)
+        {
+            Vector3d up = (position - planet.Position).Normalized;
+            Vector3d e = Vector3d.Cross(planet.Rotation.SpinAxis, up);
+            if (e.SqrMagnitude < 1e-20) e = Vector3d.Cross(Vector3d.UnitX, up);
+            Vector3d east = e.Normalized;
+            Vector3d north = Vector3d.Cross(up, east);
+            Vector3d d = direction.Normalized;
+            pitchDegrees = Math.Acos(MathD.Clamp(Vector3d.Dot(d, up), -1.0, 1.0)) * MathD.RadToDeg;
+            headingDegrees = Math.Atan2(Vector3d.Dot(d, east), Vector3d.Dot(d, north)) * MathD.RadToDeg;
+            if (headingDegrees < 0.0) headingDegrees += 360.0;
+        }
+
         // ---- Initial conditions (test tools; nothing here chooses a trajectory for the player) ----
 
         /// <summary>Puts the body at rest on the surface along a planet-fixed direction.</summary>
@@ -134,6 +252,8 @@ namespace SpaceSim.Flight
             IsLanded = true;
             State = LandedState(time);
             PreviousState = State;
+            Recorder.Reset();
+            UpdatePrimary();
         }
 
         /// <summary>
@@ -159,6 +279,7 @@ namespace SpaceSim.Flight
             IsLanded = false;
             State = new BodyState(position, velocity, time);
             PreviousState = State;
+            Recorder.Reset();
             if (planet.AltitudeAboveSurface(position, time) < ContactRadius)
             {
                 // Started below ground: lift to the surface, keep the velocity (it may be pointing upward).
@@ -169,6 +290,7 @@ namespace SpaceSim.Flight
                 double vUp = Vector3d.Dot(velocity - planet.SurfaceVelocityAt(lifted), (lifted - planet.Position).Normalized);
                 if (vUp <= 0.0) Land(time, lifted, velocity);
             }
+            UpdatePrimary();
         }
 
         // ---- Stepping -------------------------------------------------------------------------
@@ -200,18 +322,34 @@ namespace SpaceSim.Flight
             for (int i = 0; i < n; i++)
             {
                 BodyState before = State;
-                BodyState after = NumericalIntegrator.Step(before, h, this, Method);
+                IntegrationMethod method = ActiveMethod;
+                BodyState after = NumericalIntegrator.Step(before, h, this, method);
                 if (planet.AltitudeAboveSurface(after.Position, after.Time) < ContactRadius)
                 {
-                    ResolveImpact(before, h);
+                    ResolveImpact(before, h, method);
                     // Remaining time is spent resting on the surface.
                     double endTime = PreviousState.Time + dt;
                     State = LandedState(endTime);
                     return;
                 }
+                RecordSubstep(before, after, h);
                 State = after;
                 Rocket?.Burn(h);
+                UpdatePrimary();
             }
+        }
+
+        void RecordSubstep(BodyState before, BodyState after, double h)
+        {
+            Vector3d r = before.Position, v = before.Velocity;
+            Vector3d aDrag = DragAcceleration(r, v);
+            Vector3d aThrust = ThrustAcceleration(r);
+            double rho = planet.DensityAt(r);
+            Vector3d vAir = v - planet.AirVelocityAt(r);
+            double burned = Rocket != null ? Rocket.MassFlow * h : 0.0;
+            Recorder.Record(h, v, v - planet.SurfaceVelocityAt(r), GravityAcceleration(before.Time, r), aDrag, aThrust,
+                planet.AltitudeAboveSurface(after.Position, after.Time),
+                AtmosphericDrag.DynamicPressure(rho, vAir.Magnitude), burned);
         }
 
         /// <summary>
@@ -224,7 +362,7 @@ namespace SpaceSim.Flight
             Vector3d up = rel.Normalized;
             Vector3d w = planet.Rotation.AngularVelocity;
             Vector3d centripetal = -Vector3d.Cross(w, Vector3d.Cross(w, rel));
-            Vector3d net = ThrustAcceleration(position) + Gravity.AccelerationAt(position);
+            Vector3d net = ThrustAcceleration(position) + GravityAcceleration(State.Time, position);
             return Vector3d.Dot(net, up) > Vector3d.Dot(centripetal, up);
         }
 
@@ -243,14 +381,14 @@ namespace SpaceSim.Flight
         }
 
         /// <summary>Bisection on the sub-step duration to find the contact time, then lands there.</summary>
-        void ResolveImpact(BodyState before, double h)
+        void ResolveImpact(BodyState before, double h, IntegrationMethod method)
         {
             double lo = 0.0, hi = h;
             BodyState contact = before;
             for (int k = 0; k < 24; k++)
             {
                 double mid = 0.5 * (lo + hi);
-                BodyState probe = NumericalIntegrator.Step(before, mid, this, Method);
+                BodyState probe = NumericalIntegrator.Step(before, mid, this, method);
                 if (planet.AltitudeAboveSurface(probe.Position, probe.Time) < ContactRadius) hi = mid;
                 else
                 {
@@ -281,6 +419,7 @@ namespace SpaceSim.Flight
 
             LandedFixedPosition = fixedDir * (planet.SurfaceRadius(fixedDir) + ContactRadius);
             IsLanded = true;
+            if (Navigation != null) Primary = FrameBody; // the ground belongs to the frame body
         }
 
         BodyState LandedState(double time)

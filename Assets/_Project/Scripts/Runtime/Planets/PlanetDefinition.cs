@@ -43,6 +43,8 @@ namespace SpaceSim.Runtime
         public string parentBodyId = "";
         public OrbitProperties orbit = new OrbitProperties();
         [TextArea(2, 6)] public string description = "";
+        [Tooltip("Radiation / acid danger levels (0 = harmless, 1 = moderate, 2 = severe).")]
+        public EnvironmentHazards hazards = new EnvironmentHazards();
 
         /// <summary>Builds a runtime definition from engine-independent preset data.</summary>
         public static PlanetDefinition FromPreset(CelestialBodyPreset p)
@@ -57,6 +59,7 @@ namespace SpaceSim.Runtime
             d.optics = p.Optics.Clone();
             d.orbit = p.Orbit.Clone();
             d.parentBodyId = p.ParentId ?? "";
+            d.hazards = p.Hazards != null ? p.Hazards.Clone() : new EnvironmentHazards();
             d.launchSite.latitudeDegrees = p.LaunchLatitude;
             d.launchSite.longitudeDegrees = p.LaunchLongitude;
             d.launchSite.name = "Площадка · " + p.DisplayName;

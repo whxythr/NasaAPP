@@ -126,7 +126,7 @@ namespace SpaceSim.Runtime
                 surfaceMaterial.SetFloat(SScaleHeightR, hR);
                 surfaceMaterial.SetFloat(SScaleHeightM, hM);
                 surfaceMaterial.SetFloat(SHasAtmosphere, hasAir ? 1f : 0f);
-                surfaceMaterial.SetVector(SSkyAmbient, system.SkyAmbient);
+                surfaceMaterial.SetVector(SSkyAmbient, system.SkyAmbientFor(planet));
             }
 
             meshRenderer.enabled = hasAir;

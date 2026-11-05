@@ -62,19 +62,23 @@ Shader "SpaceSim/PlanetSurface"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "SpaceSimLighting.hlsl"
+            #include "SpaceSimDetail.hlsl"
 
             struct Attributes
             {
                 float4 positionOS : POSITION;
                 float3 normalOS : NORMAL;
                 float4 color : COLOR;
+                float2 uv0 : TEXCOORD0; // chunk centre mod period (x, y)
+                float2 uv1 : TEXCOORD1; // … (z)
             };
 
             struct Varyings
             {
                 float4 positionCS : SV_POSITION;
                 float3 positionWS : TEXCOORD0;
-                float3 normalWS : TEXCOORD1;
+                float3 normalOS : TEXCOORD1;
+                float3 fixedPos : TEXCOORD2;
                 float4 color : COLOR;
             };
 
@@ -84,7 +88,8 @@ Shader "SpaceSim/PlanetSurface"
                 VertexPositionInputs p = GetVertexPositionInputs(v.positionOS.xyz);
                 o.positionCS = p.positionCS;
                 o.positionWS = p.positionWS;
-                o.normalWS = TransformObjectToWorldNormal(v.normalOS);
+                o.normalOS = v.normalOS;
+                o.fixedPos = float3(v.uv0.x, v.uv0.y, v.uv1.x) + v.positionOS.xyz;
                 o.color = v.color;
                 return o;
             }
@@ -94,7 +99,10 @@ Shader "SpaceSim/PlanetSurface"
                 float4 shadowCoord = TransformWorldToShadowCoord(i.positionWS);
                 Light mainLight = GetMainLight(shadowCoord);
                 float3 viewDir = normalize(GetWorldSpaceViewDir(i.positionWS));
-                float3 c = SpaceSimShadeSurface(i.positionWS, normalize(i.normalWS), i.color.rgb, i.color.a,
+                float3 albedo = i.color.rgb;
+                float3 nOS = normalize(i.normalOS);
+                SpaceSimGroundDetail(i.fixedPos, length(GetCameraPositionWS() - i.positionWS), i.color.a, albedo, nOS);
+                float3 c = SpaceSimShadeSurface(i.positionWS, normalize(TransformObjectToWorldNormal(nOS)), albedo, i.color.a,
                                                 viewDir, mainLight.shadowAttenuation, _AmbientFloor, _WaterSpecular);
                 return half4(c, 1);
             }
@@ -196,12 +204,14 @@ Shader "SpaceSim/PlanetSurface"
             float3 _SpaceSimSkyAmbient;
 
             #include "SpaceSimLighting.hlsl"
+            #include "SpaceSimDetail.hlsl"
 
             struct v2f
             {
                 float4 pos : SV_POSITION;
                 float3 worldPos : TEXCOORD0;
-                float3 normal : TEXCOORD1;
+                float3 normalOS : TEXCOORD1;
+                float3 fixedPos : TEXCOORD2;
                 float4 color : COLOR;
             };
 
@@ -210,7 +220,8 @@ Shader "SpaceSim/PlanetSurface"
                 v2f o;
                 o.pos = UnityObjectToClipPos(v.vertex);
                 o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-                o.normal = UnityObjectToWorldNormal(v.normal);
+                o.normalOS = v.normal;
+                o.fixedPos = float3(v.texcoord.x, v.texcoord.y, v.texcoord1.x) + v.vertex.xyz;
                 o.color = v.color;
                 return o;
             }
@@ -218,7 +229,10 @@ Shader "SpaceSim/PlanetSurface"
             float4 frag(v2f i) : SV_Target
             {
                 float3 viewDir = normalize(_WorldSpaceCameraPos - i.worldPos);
-                float3 c = SpaceSimShadeSurface(i.worldPos, normalize(i.normal), i.color.rgb, i.color.a,
+                float3 albedo = i.color.rgb;
+                float3 nOS = normalize(i.normalOS);
+                SpaceSimGroundDetail(i.fixedPos, length(_WorldSpaceCameraPos - i.worldPos), i.color.a, albedo, nOS);
+                float3 c = SpaceSimShadeSurface(i.worldPos, normalize(UnityObjectToWorldNormal(nOS)), albedo, i.color.a,
                                                 viewDir, 1.0, _AmbientFloor, _WaterSpecular);
                 return float4(c, 1);
             }

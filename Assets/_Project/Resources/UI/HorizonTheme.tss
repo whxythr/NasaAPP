@@ -1,0 +1,4 @@
+/* HORIZON runtime theme: deliberately empty.
+   The menus are styled entirely by MainMenu.uss / GameMenu.uss; Unity's default runtime theme would restyle
+   Button, Label and friends. A theme must still be set on PanelSettings, otherwise Unity warns
+   "No Theme Style Sheet set to PanelSettings" every time a panel is created. */

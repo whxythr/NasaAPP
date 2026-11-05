@@ -2,6 +2,9 @@ using System;
 using SpaceSim.Flight;
 using SpaceSim.Mathematics;
 using SpaceSim.Units;
+using SpaceSim.Vehicles;
+using SpaceSim.Economy;
+using SpaceSim.Planets;
 using UnityEngine;
 
 namespace SpaceSim.Runtime
@@ -33,6 +36,20 @@ namespace SpaceSim.Runtime
         bool showMarkers = true;
         bool showMap;
         RocketControls rocketControls;
+        HangarUI hangar;
+        PlayerSession session;
+        ShopUI shop;
+        AcademyUI academy;
+        AcademyService academyService;
+        NavigationUI navigationUi;
+        NavigationService navigation;
+        SpaceSim.Academy.AcademyHint banner;
+        float bannerUntil;
+        bool pausedByAcademy;
+        Action newRocket;
+
+        /// <summary>What R does (a new rocket at the start planet's pad; set by the bootstrap).</summary>
+        public void SetNewRocket(Action action) => newRocket = action;
 
         public void Initialize(FlightStateController flightState, FlightBody flightBody, PlanetRuntime planetRuntime,
             SimulationController sim, SpaceCameraController cam, StarfieldController starfield,
@@ -58,10 +75,45 @@ namespace SpaceSim.Runtime
         void Update()
         {
             if (state == null) return;
-            if (!system.SpaceUnlocked && state.Telemetry.AboveSpaceBoundary)
+            if (!system.SpaceUnlocked && (state.Telemetry.AboveSpaceBoundary || (session != null && session.Profile.HasMilestone(ResearchMilestones.ReachSpace))))
             {
                 system.UnlockSpace();
-                state.Notify("Вы в космосе! Открыта звёздная система: Tab — карта системы, N — метки тел, J — перелёт к другому телу.");
+                if (state.Telemetry.AboveSpaceBoundary)
+                    state.Notify("Вы в космосе! Открыта звёздная система: " + FlightInput.KeyLabel(InputKey.Tab) + " — карта системы, " +
+                                 FlightInput.KeyLabel(InputKey.N) + " — метки тел, " + FlightInput.KeyLabel(InputKey.J) + " — перелёт к другому телу.");
+            }
+            CheckMilestones();
+            // Hangar and shop are modal: while one is open, camera and flight hotkeys pause (FlightInput.IsTyping).
+            FlightInput.ModalWindowOpen = AnyModalOpen;
+            if (FlightInput.PauseMenuOpen) return; // the Esc menu owns the keyboard
+            if (GUIUtility.keyboardControl == 0)
+            {
+                if (hangar != null && FlightInput.GetKeyDown(InputKey.B) && (hangar.IsOpen || body.IsOnLaunchPad) && !(shop != null && shop.IsOpen) &&
+                    !(academy != null && academy.IsOpen))
+                {
+                    hangar.Toggle();
+                    FlightInput.ModalWindowOpen = AnyModalOpen;
+                    return;
+                }
+                if (shop != null && FlightInput.GetKeyDown(InputKey.K) && !(hangar != null && hangar.IsOpen) && !(academy != null && academy.IsOpen))
+                {
+                    shop.Toggle();
+                    FlightInput.ModalWindowOpen = AnyModalOpen;
+                    return;
+                }
+                if (navigationUi != null && FlightInput.GetKeyDown(InputKey.G) && !AnyModalOpen)
+                {
+                    navigationUi.Toggle();
+                    return;
+                }
+                if (academy != null && FlightInput.GetKeyDown(InputKey.L) && !(hangar != null && hangar.IsOpen) && !(shop != null && shop.IsOpen))
+                {
+                    if (!academy.IsOpen && banner != null && Time.unscaledTime < bannerUntil) academy.OpenHint(banner);
+                    else academy.Toggle();
+                    banner = null;
+                    FlightInput.ModalWindowOpen = AnyModalOpen;
+                    return;
+                }
             }
             if (FlightInput.IsTyping) return;
             if (FlightInput.GetKeyDown(InputKey.H)) visible = !visible;
@@ -75,24 +127,32 @@ namespace SpaceSim.Runtime
                     return;
                 }
             }
-            if (FlightInput.GetKeyDown(InputKey.U)) units = units == DisplayUnitSystem.SI ? DisplayUnitSystem.Kilometric : DisplayUnitSystem.SI;
+            if (FlightInput.GetKeyDown(InputKey.U))
+            {
+                units = units == DisplayUnitSystem.SI ? DisplayUnitSystem.Kilometric : DisplayUnitSystem.SI;
+                session?.SetUnits(units);
+            }
             if (FlightInput.GetKeyDown(InputKey.O)) showOrbitAnalysis = !showOrbitAnalysis;
             if (FlightInput.GetKeyDown(InputKey.M) || FlightInput.GetKeyDown(InputKey.F1)) manual.Toggle();
             if (FlightInput.GetKeyDown(InputKey.I)) initialConditions.Toggle();
             if (FlightInput.GetKeyDown(InputKey.R))
             {
-                body.ResetToLaunchSite();
-                state.Notify("Новая заправленная ракета на стартовой площадке.");
+                if (newRocket != null) newRocket();
+                else
+                {
+                    body.ResetToLaunchSite();
+                    state.Notify("Новая заправленная ракета на стартовой площадке.");
+                }
             }
         }
 
         void OnGUI()
         {
-            if (state == null || planet.Model == null) return;
+            if (state == null || planet.Model == null || FlightInput.PauseMenuOpen) return; // the Esc menu covers the view
             HudStyle.Begin();
             if (!visible)
             {
-                GUI.Label(new Rect(10, 6, 400, 20), "H — показать приборы", HudStyle.Small);
+                GUI.Label(new Rect(10, 6, 400, 20), HudStyle.Key(InputKey.H) + " — показать приборы", HudStyle.HintRichLeft);
                 return;
             }
             Vector2 screen = HudStyle.VirtualScreen;
@@ -102,28 +162,85 @@ namespace SpaceSim.Runtime
 
             GUILayout.BeginArea(new Rect(12, 12, 360, screen.y - 80));
             DrawTelemetry(t);
-            if (showOrbitAnalysis) DrawOrbit(t);
+            if (showOrbitAnalysis)
+            {
+                if (body.Capabilities.Has(ModuleCapability.OrbitPrediction)) DrawOrbit(t);
+                else
+                {
+                    GUILayout.Space(6);
+                    GUILayout.BeginVertical(HudStyle.Panel);
+                    GUILayout.Label("АНАЛИЗ ОРБИТЫ НЕДОСТУПЕН", HudStyle.Title);
+                    GUILayout.Label("Нужен навигационный компьютер НК-1 (добавьте в ангаре, бесплатно). Без него орбиту можно рассчитать самостоятельно по r, v и формулам Flight Manual.", HudStyle.Small);
+                    GUILayout.EndVertical();
+                }
+            }
             GUILayout.EndArea();
 
             DrawStatus(t, screen);
             DrawProximity(t, screen);
             DrawRocket(t, screen);
             DrawNotifications(screen);
+            DrawAcademyBanner(screen);
+            DrawManeuver(screen);
             if (system.SpaceUnlocked && showMap) DrawSystemMap(screen);
-            GUI.Label(new Rect(0, screen.y - 40, screen.x, 20),
-                "РАКЕТА: Enter/кнопка — зажигание · W/S — тангаж · A/D — курс · Shift/Ctrl — тяга · Z — полная · X — отсечка · Пробел — отделить ступень",
-                HudStyle.Hint);
-            GUI.Label(new Rect(0, screen.y - 22, screen.x, 20),
-                "ПКМ — обзор · колесо/± — зум · C — система отсчёта · F — фокус · , . — время · P — пауза · I — нач. условия · R — новая ракета на площадке · " +
-                (system.SpaceUnlocked ? "Tab — карта · N — метки · J — к другому телу · " : "") + "M/F1 — Manual · O — орбита · U — единицы · H — скрыть",
-                HudStyle.Hint);
+            if (hintsFor != HintsKey) BuildHints();
+            HudStyle.FooterBand(new Rect(0, screen.y - 46, screen.x, 46));
+            GUI.Label(new Rect(0, screen.y - 40, screen.x, 20), hintRocket, HudStyle.HintRich);
+            GUI.Label(new Rect(0, screen.y - 22, screen.x, 20), hintGeneral, HudStyle.HintRich);
         }
+
+        // Key hint lines follow the player's bindings; rebuilt only when the bindings (or the unlocked features) change.
+        string hintRocket, hintGeneral;
+        int hintsFor = -1;
+        static int bindingsVersion;
+        static FlightHUD() => GameSettings.Changed += () => bindingsVersion++;
+        int HintsKey => bindingsVersion * 2 + (system.SpaceUnlocked ? 1 : 0);
+
+        void BuildHints()
+        {
+            hintsFor = HintsKey;
+            string K(InputKey k) => HudStyle.Key(k);
+            hintRocket = "РАКЕТА:  " + K(InputKey.Return) + " / кнопка — зажигание  ·  " + K(InputKey.W) + "/" + K(InputKey.S) + " — тангаж  ·  " +
+                         K(InputKey.A) + "/" + K(InputKey.D) + " — курс  ·  " + K(InputKey.LeftShift) + "/" + K(InputKey.LeftCtrl) + " — тяга  ·  " +
+                         K(InputKey.Z) + " — полная  ·  " + K(InputKey.X) + " — отсечка  ·  " + K(InputKey.Space) + " — отделить ступень";
+            hintGeneral = HudStyle.KeyText("ПКМ") + " — обзор  ·  " + HudStyle.KeyText("колесо") + "/" + K(InputKey.Equals) + K(InputKey.Minus) + " — зум  ·  " +
+                          K(InputKey.C) + " — система отсчёта  ·  " + K(InputKey.F) + " — фокус  ·  " + K(InputKey.Comma) + " " + K(InputKey.Period) +
+                          " — время  ·  " + K(InputKey.P) + " — пауза  ·  " + K(InputKey.I) + " — нач. условия  ·  " + K(InputKey.R) + " — новая ракета  ·  " +
+                          (system.SpaceUnlocked ? K(InputKey.Tab) + " — карта  ·  " + K(InputKey.N) + " — метки  ·  " + K(InputKey.J) + " — к другому телу  ·  " : "") +
+                          K(InputKey.M) + " — Manual  ·  " + K(InputKey.L) + " — Академия  ·  " + K(InputKey.G) + " — навигация  ·  " + K(InputKey.O) +
+                          " — орбита  ·  " + K(InputKey.U) + " — единицы  ·  " + K(InputKey.H) + " — скрыть  ·  " + HudStyle.KeyText("Esc") + " — настройки";
+        }
+
+        /// <summary>
+        /// Esc: closes the window on top — Academy, shop, hangar, navigation, Flight Manual, initial conditions, then the system
+        /// map. Returns false when nothing was open (the Esc menu opens then).
+        /// </summary>
+        public bool CloseTopWindow()
+        {
+            if (academy != null && academy.IsOpen) academy.Toggle();
+            else if (shop != null && shop.IsOpen) shop.Toggle();
+            else if (hangar != null && hangar.IsOpen) hangar.Toggle();
+            else if (navigationUi != null && navigationUi.IsOpen) navigationUi.Toggle();
+            else if (manual != null && manual.IsOpen) manual.Toggle();
+            else if (initialConditions != null && initialConditions.IsOpen) initialConditions.Toggle();
+            else if (showMap) showMap = false;
+            else return false;
+            FlightInput.ModalWindowOpen = AnyModalOpen;
+            return true;
+        }
+
+        /// <summary>Opens or closes the Flight Manual (same as M).</summary>
+        public void ToggleManual() => manual?.Toggle();
+
+        /// <summary>Any window or overlay that Esc would close first.</summary>
+        public bool AnyWindowOpen => AnyModalOpen || (navigationUi != null && navigationUi.IsOpen) || (manual != null && manual.IsOpen) ||
+                                     (initialConditions != null && initialConditions.IsOpen) || showMap;
 
         void DrawRocket(FlightTelemetry t, Vector2 screen)
         {
             var r = body.Rocket;
             if (r == null) return;
-            var area = new Rect(screen.x - 330, screen.y - 340, 310, 250);
+            var area = new Rect(screen.x - 330, screen.y - 420, 310, 330);
             GUILayout.BeginArea(area);
             GUILayout.BeginVertical(HudStyle.Panel);
             GUILayout.Label("РАКЕТА · " + (r.HasStages ? r.CurrentStage.name + " (" + (r.StageIndex + 1) + "/" + r.StageCount + ")" : "только зонд"), HudStyle.Title);
@@ -133,27 +250,219 @@ namespace SpaceSim.Runtime
                 HudStyle.Row("Двигатель", r.IsBurning ? "РАБОТАЕТ" : (r.CanBurn ? "выключен" : "топливо кончилось"), 130);
                 HudStyle.Row("Топливо ступени", UnitFormatter.Number(fuel * 100.0, 1) + " %  (" + UnitFormatter.Number(r.CurrentPropellant / 1000.0, 1) + " т)", 130);
                 HudStyle.Row("Тяга (дроссель)", UnitFormatter.Number(r.Throttle * 100.0, 0) + " %", 130);
-                double weight = r.Mass * t.GravityMagnitude;
-                HudStyle.Row("Тяга / вес", t.ThrustAcceleration > 0 ? UnitFormatter.Number(t.ThrustAcceleration * r.Mass / weight, 2) : "—", 130);
+                double p0 = planet.Model.Atmosphere.Pressure(0.0);
+                double pressureRatio = p0 > 0.0 ? t.Pressure / p0 : 0.0;
+                HudStyle.Row("Тяга/вес (макс.)", UnitFormatter.Number(r.AvailableThrustToWeight(pressureRatio, t.GravityMagnitude), 2), 130);
                 HudStyle.Row("Расход ṁ", UnitFormatter.Number(r.MassFlow, 0) + " кг/с", 130);
             }
             HudStyle.Row("Масса", UnitFormatter.Number(body.Simulation.CurrentMass / 1000.0, 2) + " т", 130);
             HudStyle.Row("Тангаж / курс", UnitFormatter.Number(r.PitchDegrees, 1) + "° / " + UnitFormatter.Number(r.HeadingDegrees, 0) + "°", 130);
-            HudStyle.Row("Запас Δv (вакуум)", UnitFormatter.Speed(r.DeltaVRemaining(), DisplayUnitSystem.SI), 130);
+            var rec = body.Simulation.Recorder;
+            GUILayout.Space(3);
+            HudStyle.Row("Δv идеальн. остаток", UnitFormatter.Speed(r.DeltaVRemaining(), DisplayUnitSystem.SI), 130);
+            HudStyle.Row("Δv израсходовано", UnitFormatter.Speed(rec.DeltaVExpended, DisplayUnitSystem.SI), 130);
+            HudStyle.Row("Потери: гравит.", UnitFormatter.Speed(rec.GravityLoss, DisplayUnitSystem.SI), 130);
+            HudStyle.Row("Потери: сопрот.", UnitFormatter.Speed(rec.DragLoss, DisplayUnitSystem.SI), 130);
+            HudStyle.Row("Потери: управл.", UnitFormatter.Speed(rec.SteeringLoss, DisplayUnitSystem.SI), 130);
+            GUILayout.Label("Идеальный Δv (Циолковский) — без потерь; реальный разгон меньше на сумму потерь.", HudStyle.Small);
             GUILayout.EndVertical();
             GUILayout.EndArea();
 
             // Big action button in the bottom centre.
-            var button = new Rect(screen.x * 0.5f - 130, screen.y - 112, 260, 56);
-            if (r.HasStages && !r.IsBurning && r.CanBurn)
+            var button = new Rect(screen.x * 0.5f - 170, screen.y - 112, 340, 56); // wide enough for «ВКЛЮЧИТЬ ДВИГАТЕЛЬ»
+            bool outside = rocketControls != null && rocketControls.Suspended; // astronaut on foot
+            if (body.Destroyed || outside) { }
+            else if (r.HasStages && !r.IsBurning && r.CanBurn)
             {
                 string label = body.Simulation.IsLanded ? "ЗАПУСК" : "ВКЛЮЧИТЬ ДВИГАТЕЛЬ";
-                if (GUI.Button(button, label, HudStyle.BigButton)) rocketControls.Ignite();
+                if (GUI.Button(button, label, HudStyle.Primary)) rocketControls.Ignite();
             }
             else if (r.HasStages && !r.CanBurn)
             {
-                if (GUI.Button(button, "ОТДЕЛИТЬ СТУПЕНЬ", HudStyle.BigButton)) rocketControls.Separate();
+                if (GUI.Button(button, "ОТДЕЛИТЬ СТУПЕНЬ", HudStyle.Primary)) rocketControls.Separate();
             }
+
+            // Hangar: only on the launch pad, before ignition.
+            if (hangar != null && body.IsOnLaunchPad && !r.IsBurning && !AnyModalOpen && !outside && !body.Destroyed)
+            {
+                if (GUI.Button(new Rect(button.x - 190, button.y + 8, 170, 40), "АНГАР (" + FlightInput.KeyLabel(InputKey.B) + ")", HudStyle.BigButton)) hangar.Toggle();
+            }
+            // Shop: available anywhere (purchases take effect in the hangar).
+            if (shop != null && !AnyModalOpen)
+            {
+                if (GUI.Button(new Rect(button.xMax + 20, button.y + 8, 190, 40), "МАГАЗИН (" + FlightInput.KeyLabel(InputKey.K) + ")", HudStyle.BigButton)) shop.Toggle();
+            }
+            // Navigation: right of the shop if there is room before the rocket panel, otherwise above the shop button.
+            if (navigationUi != null && !AnyModalOpen)
+            {
+                var nav = new Rect(button.xMax + 20 + 190 + 12, button.y + 8, 210, 40);
+                if (nav.xMax > screen.x - 340) nav = new Rect(button.xMax + 20, button.y - 40, 190, 40);
+                if (GUI.Button(nav, "НАВИГАЦИЯ (" + FlightInput.KeyLabel(InputKey.G) + ")", HudStyle.BigButton)) navigationUi.Toggle();
+            }
+            // Academy: anywhere; left of the hangar slot so it never covers the rocket panel.
+            if (academy != null && !AnyModalOpen)
+            {
+                if (GUI.Button(new Rect(button.x - 190 - 12 - 210, button.y + 8, 210, 40), "АКАДЕМИЯ (" + FlightInput.KeyLabel(InputKey.L) + ")", HudStyle.BigButton)) academy.Toggle();
+            }
+        }
+
+        /// <summary>
+        /// A contextual Academy lesson just raised by the flight: one compact line under the status panel. It never covers the
+        /// view centre, fades on its own, and disappears once the condition is gone. L or the button opens the full lesson.
+        /// </summary>
+        void DrawAcademyBanner(Vector2 screen)
+        {
+            if (banner == null || academy == null || AnyModalOpen) return;
+            bool stillActive = academyService != null && academyService.Advisor.IsActive(banner.Id);
+            if (Time.unscaledTime > bannerUntil || (!stillActive && Time.unscaledTime > bannerUntil - 17f))
+            {
+                banner = null;
+                return;
+            }
+            const float w = 620f, h = 78f;
+            var r = new Rect((screen.x - w) * 0.5f, 134f, w, h); // below the status box and its credits line
+            GUI.Box(r, GUIContent.none, HudStyle.Panel);
+            Color c = banner.Severity == SpaceSim.Academy.HintSeverity.Warning ? HudStyle.Warning
+                : banner.Severity == SpaceSim.Academy.HintSeverity.Info ? HudStyle.Accent : Color.white;
+            var old = GUI.color;
+            GUI.color = c;
+            GUI.Label(new Rect(r.x + 10, r.y + 6, w - 200, 18), "АКАДЕМИЯ · " + banner.Title, HudStyle.Title);
+            GUI.color = old;
+            GUI.Label(new Rect(r.x + 10, r.y + 24, w - 200, h - 28), banner.Message, HudStyle.Small);
+            if (GUI.Button(new Rect(r.xMax - 180, r.y + 22, 140, 34), "Подробнее (" + FlightInput.KeyLabel(InputKey.L) + ")", HudStyle.Button))
+            {
+                academy.OpenHint(banner);
+                banner = null;
+            }
+            if (banner != null && GUI.Button(new Rect(r.xMax - 34, r.y + 22, 26, 34), "×", HudStyle.Button)) banner = null;
+        }
+
+        bool AnyModalOpen => (hangar != null && hangar.IsOpen) || (shop != null && shop.IsOpen) || (academy != null && academy.IsOpen);
+
+        /// <summary>Connects the navigation window and the flight-plan service (burn guidance, rails warp notices).</summary>
+        public void SetNavigation(NavigationUI window, NavigationService service)
+        {
+            navigationUi = window;
+            navigation = service;
+        }
+
+        /// <summary>
+        /// Burn guidance for a planned manoeuvre and the predicted encounter: a compact panel above the rocket panel. Values come
+        /// from <see cref="NavigationService"/> (Core predictor); the player flies the burn.
+        /// </summary>
+        void DrawManeuver(Vector2 screen)
+        {
+            if (navigation == null) return;
+            NodeGuidance g = navigation.Guidance;
+            SpaceSim.Navigation.TrajectoryPrediction p = navigation.Prediction;
+            int target = navigation.Plan.Target;
+            if (!g.Active && (p == null || target < 0)) return;
+            var area = new Rect(screen.x - 330, screen.y - 560, 310, 134);
+            GUILayout.BeginArea(area);
+            GUILayout.BeginVertical(HudStyle.Panel);
+            var sys = navigation.System;
+            if (g.Active)
+            {
+                GUILayout.Label("МАНЁВР · Δv " + UnitFormatter.Number(navigation.Plan.Departure.Magnitude, 0) + " м/с", HudStyle.Title);
+                if (!g.Started)
+                    HudStyle.Row("Зажигание через", g.TimeToIgnition > 0 ? UnitFormatter.Duration(g.TimeToIgnition) : "СЕЙЧАС", 130);
+                HudStyle.Row("Осталось Δv", UnitFormatter.Number(g.Remaining, 1) + " м/с", 130);
+                HudStyle.Row("Тангаж / курс", UnitFormatter.Number(g.Pitch, 1) + "° / " + UnitFormatter.Number(g.Heading, 1) + "°", 130);
+                HudStyle.Row("Работа двигателя", UnitFormatter.Number(g.BurnTime, 0) + " с", 130);
+            }
+            if (p != null && target >= 0 && sys != null)
+            {
+                string name = sys.NameOf(target);
+                string text = p.Encounter ? "сфера влияния через " + UnitFormatter.Duration(p.EncounterTime - navigation.Now)
+                    : "промах " + UnitFormatter.Number(p.ClosestDistance / 1e9, 2) + " млн км";
+                HudStyle.Row(name, text, 130);
+            }
+            GUILayout.EndVertical();
+            GUILayout.EndArea();
+        }
+
+        /// <summary>Connects the Flight Academy window and the advisor that raises contextual lessons.</summary>
+        public void SetAcademy(AcademyUI academyUi, AcademyService service)
+        {
+            if (academy != null) academy.OpenChanged -= OnAcademyOpenChanged;
+            if (academyService != null) academyService.HintRaised -= OnHintRaised;
+            academy = academyUi;
+            academyService = service;
+            if (academy != null) academy.OpenChanged += OnAcademyOpenChanged;
+            if (academyService != null) academyService.HintRaised += OnHintRaised;
+        }
+
+        void OnHintRaised(SpaceSim.Academy.AcademyHint hint)
+        {
+            banner = hint;
+            bannerUntil = Time.unscaledTime + 25f;
+        }
+
+        /// <summary>Reading a lesson mid-flight should not cost the flight: the simulation pauses while the Academy is open.</summary>
+        void OnAcademyOpenChanged(bool isOpen)
+        {
+            FlightInput.ModalWindowOpen = AnyModalOpen;
+            if (isOpen)
+            {
+                if (!simulation.Paused && !body.Simulation.IsLanded)
+                {
+                    simulation.SetPaused(true);
+                    pausedByAcademy = true;
+                    state.Notify("Пауза на время Академии — закройте её (" + FlightInput.KeyLabel(InputKey.L) + " или Esc), чтобы продолжить полёт.");
+                }
+            }
+            else if (pausedByAcademy)
+            {
+                pausedByAcademy = false;
+                simulation.SetPaused(false);
+            }
+        }
+
+        /// <summary>Connects the hangar window (built with the flight stack).</summary>
+        public void SetHangar(HangarUI hangarUi) => hangar = hangarUi;
+
+        /// <summary>Connects the shop / market / research window.</summary>
+        public void SetShop(ShopUI shopUi) => shop = shopUi;
+
+        /// <summary>Connects the persistent player session (credits, rewards, saved settings).</summary>
+        public void SetSession(PlayerSession playerSession)
+        {
+            session = playerSession;
+            if (session != null) units = session.Profile.settings.units;
+        }
+
+        /// <summary>
+        /// Research rewards for physical achievements of a real flight (not after the initial-conditions test tool).
+        /// "Space" and "escape" count only from the start planet.
+        /// </summary>
+        void CheckMilestones()
+        {
+            if (session == null || body.UsedTestTool || body.Simulation.IsLanded) return;
+            bool home = system.ActiveIndex == system.IndexOf(homeBodyId);
+            FlightTelemetry t = state.Telemetry;
+            if (home && t.AboveSpaceBoundary) Reward(ResearchMilestones.ReachSpace);
+            if (state.Phase == FlightPhase.OrbitalFlight) Reward(ResearchMilestones.FirstOrbit);
+            if (home && state.Phase == FlightPhase.EscapeTrajectory) Reward(ResearchMilestones.EscapeHome);
+        }
+
+        void Reward(string id)
+        {
+            if (session.Profile.HasMilestone(id)) return;
+            MilestoneDefinition m = session.Award(id);
+            if (m != null)
+                state.Notify("ДОСТИЖЕНИЕ: «" + m.Name + "» — +" + m.CreditReward + " кр, +" + UnitFormatter.Number(m.ResearchReward, 0) +
+                             " очк. исследований. Новые товары в магазине.");
+        }
+
+        string homeBodyId => session != null && session.Profile.visitedBodies.Count > 0 ? session.Profile.visitedBodies[0] : "";
+
+        void OnDestroy()
+        {
+            FlightInput.ModalWindowOpen = false;
+            SetAcademy(null, null);
+            // The flight stack is rebuilt on a body switch; never leave the shared simulation paused by a window that is gone.
+            if (pausedByAcademy && simulation != null) simulation.SetPaused(false);
+            pausedByAcademy = false;
         }
 
         /// <summary>Top-down map of the system (true scale of orbit radii): the star, orbits and current positions.</summary>
@@ -162,7 +471,7 @@ namespace SpaceSim.Runtime
             float size = Mathf.Min(screen.x, screen.y) - 200f;
             var rect = new Rect((screen.x - size) * 0.5f, (screen.y - size) * 0.5f, size, size);
             GUI.Box(rect, GUIContent.none, HudStyle.Panel);
-            GUI.Label(new Rect(rect.x + 10, rect.y + 6, size - 20, 20), "КАРТА СИСТЕМЫ · " + system.SystemName + " (вид сверху, Tab — закрыть)", HudStyle.Title);
+            GUI.Label(new Rect(rect.x + 10, rect.y + 6, size - 20, 20), "КАРТА СИСТЕМЫ · " + system.SystemName + " (вид сверху, " + FlightInput.KeyLabel(InputKey.Tab) + " или Esc — закрыть)", HudStyle.Title);
             Vector2 c = rect.center;
             double maxR = 1.0;
             var heliocentric = new Vector3d[system.Bodies.Count];
@@ -263,6 +572,7 @@ namespace SpaceSim.Runtime
             HudStyle.Row("Давление p", UnitFormatter.Pressure(t.Pressure));
             HudStyle.Row("Скоростной напор q", UnitFormatter.Pressure(t.DynamicPressure));
             HudStyle.Row("Сопротивление a_drag", UnitFormatter.Acceleration(t.DragAcceleration));
+            if (body.HeatFlux > 1.0) HudStyle.Row("Нагрев носа (Саттон–Грейвс)", UnitFormatter.Number(body.HeatFlux / 1000.0, 1) + " кВт/м²");
             GUILayout.Space(4);
             HudStyle.Row("ε = v²/2 − μ/r", UnitFormatter.SpecificEnergy(t.SpecificEnergy, units));
             GUILayout.EndVertical();
@@ -296,12 +606,37 @@ namespace SpaceSim.Runtime
             GUI.Label(new Rect(r.x + 10, r.y + 34, w - 20, 32), ReasonText(state.Reason), HudStyle.Hint);
 
             string warp = simulation.Paused ? "ПАУЗА" : "×" + UnitFormatter.Number(simulation.TimeWarp, 0);
+            if (simulation.OnRails) warp += " (на «рельсах»: точные кеплеровы дуги)";
+            else if (simulation.RailsBlocked) warp = "×" + UnitFormatter.Number(simulation.Settings.maxNumericWarp, 0) + " — выше нельзя: " + body.RailsBlockedReason();
             if (simulation.WarpLimited) warp += " (ограничено производительностью)";
             string cam = (cameraController.Focus == SpaceCameraController.FocusTarget.Planet ? "камера: планета" : "камера: аппарат") +
                          (cameraController.Frame == SpaceCameraController.ReferenceFrame.Inertial ? ", инерциальная" : ", местный горизонт");
             GUI.Label(new Rect(r.x + 10, r.y + 64, w - 20, 22),
                 "Время: " + warp + "  ·  шаг " + UnitFormatter.Number(simulation.FixedStep, 3) + " s  ·  " + cam +
                 "  ·  звёзды " + UnitFormatter.Number(stars.Visibility * 100.0, 0) + "%", HudStyle.Hint);
+
+            // Economy + environment line under the status box.
+            var info = new Rect(r.x, r.yMax + 4, w, 22);
+            string money = session != null ? "Кредиты: " + UnitFormatter.Number(session.Profile.credits, 0) + " кр  ·  исследования: " +
+                                             UnitFormatter.Number(session.Profile.researchPoints, 0) + (session.ReadOnly ? "  ·  ТОЛЬКО ЧТЕНИЕ" : "") : "";
+            HazardExposure hz = body.Condition.LastExposure;
+            double integrity = body.Condition.Integrity;
+            string hazard = "";
+            if (!hz.IsSafe || integrity < 1.0)
+            {
+                hazard = "  ·  ";
+                if (hz.RadiationExcess > 0) hazard += "РАДИАЦИЯ " + hz.Radiation + " (защита " + body.DesignCapabilities.RadiationShielding + ")  ";
+                if (hz.AcidExcess > 0) hazard += "КИСЛОТА " + hz.Acid + " (защита " + body.DesignCapabilities.AcidResistance + ")  ";
+                hazard += "оборудование " + UnitFormatter.Number(integrity * 100.0, 0) + " %" + (body.Condition.InstrumentsOnline ? "" : " — ПРИБОРЫ ОТКЛЮЧЕНЫ");
+            }
+            if (money.Length + hazard.Length > 0) GUI.Box(info, GUIContent.none, HudStyle.Panel); // readable over a bright sky
+            var sim = body.Simulation;
+            if (sim.Navigation != null && sim.Primary != sim.FrameBody)
+                hazard += "  ·  притягивает: " + sim.Navigation.NameOf(sim.Primary) + " (вне сферы влияния " + sim.Navigation.NameOf(sim.FrameBody) + ")";
+            var c = GUI.color;
+            if (!hz.IsSafe || integrity < 1.0) GUI.color = body.Condition.InstrumentsOnline ? HudStyle.Warning : HudStyle.Danger;
+            GUI.Label(info, money + hazard, HudStyle.Hint);
+            GUI.color = c;
         }
 
         void DrawProximity(FlightTelemetry t, Vector2 screen)

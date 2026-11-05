@@ -49,12 +49,41 @@ namespace SpaceSim.Physics
 
         /// <summary>Orbital period [s].</summary>
         public double Period { get; }
+        public double SemiMajorAxis => a;
+        public double Eccentricity => e;
 
         /// <summary>Gravitational parameter of the parent implied by a and T: μ = 4π²a³/T².</summary>
         public double ImpliedParentGravitationalParameter => 4.0 * Math.PI * Math.PI * a * a * a / (Period * Period);
 
         /// <summary>Position relative to the parent [m].</summary>
         public Vector3d Position(double time)
+        {
+            double E = EccentricAnomaly(time);
+            var inPlane = new Vector3d(a * (Math.Cos(E) - e), a * Math.Sqrt(1.0 - e * e) * Math.Sin(E), 0.0);
+            return orientation.Rotate(inPlane);
+        }
+
+        /// <summary>Velocity relative to the parent [m/s] (time derivative of <see cref="Position"/>).</summary>
+        public Vector3d Velocity(double time)
+        {
+            double E = EccentricAnomaly(time);
+            double dE = meanMotion / (1.0 - e * Math.Cos(E));
+            var inPlane = new Vector3d(-a * Math.Sin(E) * dE, a * Math.Sqrt(1.0 - e * e) * Math.Cos(E) * dE, 0.0);
+            return orientation.Rotate(inPlane);
+        }
+
+        /// <summary>
+        /// Acceleration of the body along these rails [m/s²]: −μ′·r/|r|³ with μ′ = 4π²a³/T² (exact for the rails motion,
+        /// even if the given period does not match the parent's μ precisely).
+        /// </summary>
+        public Vector3d Acceleration(double time)
+        {
+            Vector3d r = Position(time);
+            double d = r.Magnitude;
+            return r * (-ImpliedParentGravitationalParameter / (d * d * d));
+        }
+
+        double EccentricAnomaly(double time)
         {
             double M = MathD.WrapPi(m0 + meanMotion * time);
             double E = M;
@@ -64,8 +93,7 @@ namespace SpaceSim.Physics
                 E -= f / (1.0 - e * Math.Cos(E));
                 if (Math.Abs(f) < 1e-14) break;
             }
-            var inPlane = new Vector3d(a * (Math.Cos(E) - e), a * Math.Sqrt(1.0 - e * e) * Math.Sin(E), 0.0);
-            return orientation.Rotate(inPlane);
+            return E;
         }
     }
 

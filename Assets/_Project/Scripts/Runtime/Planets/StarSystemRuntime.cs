@@ -9,8 +9,8 @@ namespace SpaceSim.Runtime
     /// <summary>
     /// The star system: every planet/moon with its physics, visuals and atmosphere, moving along Kepler orbits.
     ///
-    /// Frame: the simulation runs in an inertial frame centred on the ACTIVE body (the one the probe is at); the
-    /// probe feels only that body's gravity (patched-conic simplification, see PHYSICS.md). All other bodies and the
+    /// Frame: the simulation runs in a non-rotating frame centred on the ACTIVE body; gravity follows patched conics
+    /// (<see cref="PatchedConicSystem"/>): inside a body's sphere of influence only that body pulls, outside — the star. All other bodies and the
     /// star are placed every frame at their orbital positions relative to the active body. Bodies beyond the camera's
     /// far plane are drawn in scaled space (exact direction and angular size, closer and smaller).
     /// </summary>
@@ -32,7 +32,10 @@ namespace SpaceSim.Runtime
         [Tooltip("Brightness of starlight on surfaces (eye-adapted; not scaled with distance).")]
         [SerializeField] float starLightIntensity = 1.4f;
         [Tooltip("Sky light colour on the ground at full daylight (visual approximation).")]
-        [SerializeField] Color skyAmbient = new Color(0.10f, 0.15f, 0.24f);
+        // sRGB; ≈ (0.11, 0.16, 0.25) linear — a clear sky gives a shaded ground ~15–20 % of the sunlit brightness, bluish.
+        // (It was ~10× weaker: shadows and the shaded side of the suit and the rocket were pitch black under a blue sky.)
+        // Airless bodies get none of it: their shadows stay black.
+        [SerializeField] Color skyAmbient = new Color(0.36f, 0.43f, 0.54f);
 
         readonly List<Body> bodies = new List<Body>();
         SimulationController simulation;
@@ -52,7 +55,24 @@ namespace SpaceSim.Runtime
         public Color SkyAmbient => skyAmbient.linear;
         public float StarLightIntensity => starLightIntensity;
 
+        /// <summary>
+        /// Sky light on a body's ground at full daylight: <see cref="SkyAmbient"/> scaled by how much air there is to scatter
+        /// sunlight — the air column p/g against Earth's 10 330 kg/m²: 1 − exp(−3·m/m⊕) (≈ 0.95 for Earth-like air, ≈ 0.02
+        /// for a 100 Pa trace of oxygen). Thin air: a dark sky and nearly black shadows. Visual approximation.
+        /// </summary>
+        public Color SkyAmbientFor(PlanetRuntime body)
+        {
+            var physical = body != null && body.Model != null ? body.Model.Properties : null;
+            if (physical == null || physical.atmosphere == null || !physical.atmosphere.hasAtmosphere || physical.SurfaceGravity <= 0.0) return Color.black;
+            double column = physical.atmosphere.surfacePressure / physical.SurfaceGravity;
+            const double earthColumn = 101325.0 / 9.80665;
+            return SkyAmbient * (float)(1.0 - Math.Exp(-3.0 * column / earthColumn));
+        }
+
         public event Action<Body> ActiveBodyChanged;
+
+        /// <summary>Orbits, spheres of influence and patched-conic gravity of this system (indices = <see cref="Bodies"/>).</summary>
+        public PatchedConicSystem Navigation { get; private set; }
 
         /// <summary>
         /// Game progression: the star system's tools (body labels, system map, jumping between bodies) open the first
@@ -90,14 +110,23 @@ namespace SpaceSim.Runtime
             }
             if (bodies.Count == 0) throw new InvalidOperationException("Star system has no bodies.");
 
+            // One navigation model for the whole game (orbits, spheres of influence, patched-conic gravity, prediction).
+            var specs = new List<NavBodySpec>();
+            foreach (Body b in bodies)
+            {
+                PlanetDefinition d = b.Runtime.Definition;
+                specs.Add(new NavBodySpec
+                {
+                    Id = d.planetId, Name = d.displayName, ParentId = string.IsNullOrEmpty(d.parentBodyId) ? null : d.parentBodyId,
+                    Physical = b.Runtime.Model.Properties, Orbit = d.orbit, MaxTerrainHeight = b.Runtime.Model.Surface.MaxSurfaceHeight,
+                    Hazards = d.hazards, Description = d.description
+                });
+            }
+            Navigation = new PatchedConicSystem(Star, specs);
             for (int i = 0; i < bodies.Count; i++)
             {
-                string parentId = bodies[i].Runtime.Definition.parentBodyId;
-                bodies[i].ParentIndex = string.IsNullOrEmpty(parentId) ? -1 : IndexOf(parentId);
-                double parentMu = bodies[i].ParentIndex >= 0
-                    ? bodies[bodies[i].ParentIndex].Runtime.Model.GravitationalParameter
-                    : Star.GravitationalParameter;
-                bodies[i].Orbit = new KeplerOrbit(bodies[i].Runtime.Definition.orbit, parentMu);
+                bodies[i].ParentIndex = Navigation[i].ParentIndex;
+                bodies[i].Orbit = Navigation[i].Orbit;
             }
             UpdatePositions(simulation.SimulationTime);
         }
@@ -124,18 +153,7 @@ namespace SpaceSim.Runtime
         }
 
         /// <summary>Position of body i relative to the star [m] at time t.</summary>
-        public Vector3d StarCentricPosition(int i, double time)
-        {
-            Vector3d p = bodies[i].Orbit.Position(time);
-            int parent = bodies[i].ParentIndex;
-            int guard = 0;
-            while (parent >= 0 && guard++ < 16)
-            {
-                p += bodies[parent].Orbit.Position(time);
-                parent = bodies[parent].ParentIndex;
-            }
-            return p;
-        }
+        public Vector3d StarCentricPosition(int i, double time) => Navigation.Position(i, time);
 
         /// <summary>Unit vector from a simulation-frame point towards the star.</summary>
         public Vector3d SunDirectionFrom(Vector3d simulationPosition) => (StarPosition - simulationPosition).Normalized;
@@ -175,13 +193,17 @@ namespace SpaceSim.Runtime
             {
                 PlanetRuntime r = bodies[i].Runtime;
                 if (r.Model == null) continue;
-                if (i == ActiveIndex)
+                double distance = (r.Model.Position - viewer).Magnitude;
+                // The active body is drawn at true scale near it (the camera's far plane is sized to contain it); scaled space
+                // only during an interplanetary cruise, when the frame stays centred on it while the vehicle is far away.
+                // (Scaling it near the ground shrank the planet around the camera and lifted the terrain over the launch pad.)
+                if (i == ActiveIndex && distance < 50.0 * r.Model.Radius)
                 {
                     r.RenderScale = 1.0;
                     continue;
                 }
                 double extent = r.Model.Radius + Math.Max(r.VisualShellHeight, r.Model.Surface.MaxSurfaceHeight) + 1000.0;
-                double reach = (r.Model.Position - viewer).Magnitude + extent;
+                double reach = distance + extent;
                 r.RenderScale = reach <= far ? 1.0 : far / reach;
             }
         }

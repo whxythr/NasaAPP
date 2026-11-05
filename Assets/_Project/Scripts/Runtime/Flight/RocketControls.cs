@@ -20,6 +20,9 @@ namespace SpaceSim.Runtime
         FlightBody body;
         FlightStateController state;
 
+        /// <summary>The keys belong to someone else now (the astronaut on foot).</summary>
+        public bool Suspended { get; set; }
+
         public void Initialize(FlightBody flightBody, FlightStateController flightState)
         {
             body = flightBody;
@@ -29,7 +32,7 @@ namespace SpaceSim.Runtime
         void Update()
         {
             var r = body != null ? body.Rocket : null;
-            if (r == null || FlightInput.IsTyping) return;
+            if (r == null || FlightInput.IsTyping || Suspended || body.Destroyed) return;
             float dt = Time.unscaledDeltaTime;
 
             if (FlightInput.GetKey(InputKey.W)) r.PitchDegrees += pitchRate * dt;
@@ -50,6 +53,11 @@ namespace SpaceSim.Runtime
 
         public void Ignite()
         {
+            if (Suspended)
+            {
+                state.Notify("Нельзя: астронавт снаружи. Вернитесь в ракету (E у ракеты).");
+                return;
+            }
             if (body.Launch()) state.Notify("Зажигание: " + body.Rocket.CurrentStage.name + ", тяга " + (body.Rocket.Throttle * 100.0).ToString("0") + " %.");
             else state.Notify("Нечем запускаться: ступень пуста или отделены все ступени.");
         }

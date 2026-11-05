@@ -31,6 +31,11 @@ namespace SpaceSim.Runtime
         /// Copies engine-independent chunk geometry into a Unity mesh: swaps axes and reverses triangle winding
         /// (the reflection flips orientation; Unity front faces are clockwise).
         /// </summary>
+        /// <summary>Period [m] of the procedural ground detail (must match SPACESIM_DETAIL_PERIOD in SpaceSimDetail.hlsl).</summary>
+        public const double DetailPeriod = 4096.0;
+
+        static double Wrap(double v) => v - DetailPeriod * System.Math.Floor(v / DetailPeriod);
+
         public static void FillMesh(ChunkMeshData data, Mesh mesh)
         {
             int n = data.VertexCount;
@@ -50,11 +55,24 @@ namespace SpaceSim.Runtime
                 tris[t + 1] = data.Triangles[t + 2];
                 tris[t + 2] = data.Triangles[t + 1];
             }
+            // Surface detail coordinates: the chunk centre modulo DetailPeriod (planet-fixed, Unity axes), constant per chunk.
+            // The shader adds the vertex position and evaluates noise with exactly that period, so the pattern is continuous
+            // across chunks, never swims with the floating origin or the planet's rotation, and keeps float precision.
+            var off = new Vector3((float)Wrap(data.Center.x), (float)Wrap(data.Center.z), (float)Wrap(data.Center.y));
+            var uv0 = new Vector2[n];
+            var uv1 = new Vector2[n];
+            for (int i = 0; i < n; i++)
+            {
+                uv0[i] = new Vector2(off.x, off.y);
+                uv1[i] = new Vector2(off.z, 0f);
+            }
             mesh.Clear();
             mesh.indexFormat = n > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
             mesh.vertices = vertices;
             mesh.normals = normals;
             mesh.colors = colors;
+            mesh.uv = uv0;
+            mesh.uv2 = uv1;
             mesh.triangles = tris;
             float b = (float)data.BoundingRadius;
             mesh.bounds = new Bounds(Vector3.zero, new Vector3(2f * b, 2f * b, 2f * b));

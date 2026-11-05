@@ -31,6 +31,70 @@ namespace SpaceSim.Editor
             ConfigurePlayer();
             ConfigureUrp();
             CreatePhase1Scene(EnsureHomeSystemAssets());
+            CreateMainMenuScene();
+        }
+
+        public const string MainMenuScenePath = Root + "/Scenes/MainMenu.unity";
+        const string UiPanelPath = Root + "/Resources/UI/HorizonPanel.asset";
+        const string UiThemePath = Root + "/Resources/UI/HorizonTheme.tss";
+
+        /// <summary>
+        /// PanelSettings template of the HORIZON menus (main menu, in-game Esc menu) with the empty HORIZON theme, so a
+        /// runtime panel never warns "No Theme Style Sheet set to PanelSettings". Existing asset is kept.
+        /// </summary>
+        public static void EnsureUiPanelAsset()
+        {
+            if (AssetDatabase.LoadAssetAtPath<UnityEngine.UIElements.PanelSettings>(UiPanelPath) != null) return;
+            AssetDatabase.ImportAsset(UiThemePath);
+            var panel = ScriptableObject.CreateInstance<UnityEngine.UIElements.PanelSettings>();
+            panel.themeStyleSheet = AssetDatabase.LoadAssetAtPath<UnityEngine.UIElements.ThemeStyleSheet>(UiThemePath);
+            panel.scaleMode = UnityEngine.UIElements.PanelScaleMode.ScaleWithScreenSize;
+            panel.referenceResolution = new Vector2Int(1920, 1080);
+            panel.screenMatchMode = UnityEngine.UIElements.PanelScreenMatchMode.MatchWidthOrHeight;
+            panel.match = 0.5f;
+            AssetDatabase.CreateAsset(panel, UiPanelPath);
+            AssetDatabase.SaveAssets();
+            Debug.Log("[SpaceSim] UI panel template created: " + UiPanelPath + (panel.themeStyleSheet == null ? " (theme NOT found!)" : ""));
+        }
+
+        /// <summary>Main menu scene (UI Toolkit, <see cref="SpaceSim.Runtime.Menu.MainMenuController"/>), first in Build Settings.</summary>
+        [MenuItem("SpaceSim/Create Main Menu Scene", priority = 42)]
+        public static void CreateMainMenuScene()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                EditorUtility.DisplayDialog("SpaceSim", "Остановите Play mode. / Stop Play mode first.", "OK");
+                return;
+            }
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            BuildMainMenuScene();
+        }
+
+        /// <summary>
+        /// Creates and saves the main menu scene and puts it first in Build Settings (the game scene stays after it, so
+        /// the menu can load it). No dialogs: the caller must have saved the open scenes.
+        /// </summary>
+        public static void BuildMainMenuScene()
+        {
+            EnsureUiPanelAsset();
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+            // UI Toolkit draws on its own; the camera only clears the screen (and silences "No cameras rendering").
+            var cam = new GameObject("MenuCamera") { tag = "MainCamera" }.AddComponent<Camera>();
+            cam.clearFlags = CameraClearFlags.SolidColor;
+            cam.backgroundColor = Color.black;
+            cam.cullingMask = 0;
+
+            new GameObject("MainMenu").AddComponent<SpaceSim.Runtime.Menu.MainMenuController>();
+
+            Directory.CreateDirectory(Path.GetDirectoryName(MainMenuScenePath));
+            EditorSceneManager.SaveScene(scene, MainMenuScenePath);
+            var scenes = new System.Collections.Generic.List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
+            scenes.RemoveAll(s => s.path == MainMenuScenePath);
+            scenes.Insert(0, new EditorBuildSettingsScene(MainMenuScenePath, true));
+            if (!scenes.Exists(s => s.path == ScenePath) && File.Exists(ScenePath)) scenes.Add(new EditorBuildSettingsScene(ScenePath, true));
+            EditorBuildSettings.scenes = scenes.ToArray();
+            Debug.Log("[SpaceSim] Scene created: " + MainMenuScenePath + " — press Play.");
         }
 
         const string HomeSystemDir = Root + "/ScriptableObjects/StarSystems/Home";
@@ -89,9 +153,36 @@ namespace SpaceSim.Editor
                 AssetDatabase.CreateAsset(asset, UrpPath);
             }
             asset.supportsCameraDepthTexture = true; // the atmosphere pass needs scene depth
+            // …of THIS frame: the atmosphere is a transparent pass, so depth must be copied after the opaques. With
+            // "after transparents" it saw no geometry and hazed the ground and the rocket as if they were open sky.
+            var rendererData = AssetDatabase.LoadAssetAtPath<UniversalRendererData>(UrpRendererPath);
+            if (rendererData != null && rendererData.copyDepthMode != CopyDepthMode.AfterOpaques)
+            {
+                rendererData.copyDepthMode = CopyDepthMode.AfterOpaques;
+                EditorUtility.SetDirty(rendererData);
+            }
+            // The brightness setting (ScreenBrightness) uses a post-exposure Volume; without post-process data URP skips it.
+            // Post-processing stays off on the camera while brightness is at its default, so the image is unchanged then.
+            if (rendererData != null && rendererData.postProcessData == null)
+            {
+                rendererData.postProcessData = AssetDatabase.LoadAssetAtPath<PostProcessData>(
+                    "Packages/com.unity.render-pipelines.universal/Runtime/Data/PostProcessData.asset");
+                EditorUtility.SetDirty(rendererData);
+            }
             asset.supportsHDR = true;
             asset.shadowDistance = 400f;
             asset.shadowCascadeCount = 4;
+            // The astronaut on foot: a sharp first cascade (12 m) at 4096² and soft (filtered) edges, so a 15 cm leg still
+            // casts a clean shadow next to the boots; the rocket and the tower use the outer cascades.
+            asset.cascade4Split = new Vector3(0.03f, 0.12f, 0.4f);
+            asset.mainLightShadowmapResolution = 4096;
+            var serialized = new SerializedObject(asset); // supportsSoftShadows has an internal setter
+            SerializedProperty soft = serialized.FindProperty("m_SoftShadowsSupported");
+            if (soft != null && !soft.boolValue)
+            {
+                soft.boolValue = true;
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+            }
             EditorUtility.SetDirty(asset);
             GraphicsSettings.defaultRenderPipeline = asset;
             QualitySettings.renderPipeline = asset;
@@ -146,7 +237,8 @@ namespace SpaceSim.Editor
             EditorSceneManager.SaveScene(scene, ScenePath);
             var scenes = new System.Collections.Generic.List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
             scenes.RemoveAll(s => s.path == ScenePath);
-            scenes.Insert(0, new EditorBuildSettingsScene(ScenePath, true));
+            // Right after the main menu (the build starts there), otherwise first.
+            scenes.Insert(scenes.FindIndex(s => s.path == MainMenuScenePath) + 1, new EditorBuildSettingsScene(ScenePath, true));
             EditorBuildSettings.scenes = scenes.ToArray();
             Debug.Log("[SpaceSim] Scene created: " + ScenePath + " — press Play.");
         }

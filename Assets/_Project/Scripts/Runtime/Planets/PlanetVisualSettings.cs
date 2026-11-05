@@ -19,7 +19,7 @@ namespace SpaceSim.Runtime
         [Tooltip("Quads per chunk edge. Power of two keeps edge vertices bit-exact between chunks.")]
         public int chunkResolution = 32;
         [Tooltip("Deepest quadtree level. Level L chunk edge ≈ (π/2·R)/2^L; 14 ≈ 610 m (≈19 m per quad on Earth).")]
-        [Range(4, 20)] public int maxLevel = 14;
+        [Range(4, 20)] public int maxLevel = 17;
         [Tooltip("A chunk splits when the camera is closer than edgeLength × this factor.")]
         [Range(0.5f, 6f)] public float splitDistanceFactor = 2.2f;
         [Tooltip("Generate chunk geometry on worker threads (disable on platforms without threads, e.g. WebGL).")]

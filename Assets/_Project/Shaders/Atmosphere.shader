@@ -67,6 +67,14 @@ Shader "SpaceSim/Atmosphere"
                 o.pos = UnityObjectToClipPos(v.vertex);
                 o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
                 o.screenPos = ComputeScreenPos(o.pos);
+                // The shell writes no depth and ignores the depth test, so its clip depth only decides clipping: keep the
+                // far side inside the far plane. Near the ground the camera's far plane is ~900 km (real-time shadows need
+                // it), shorter than the line of sight to the shell along the horizon.
+            #if defined(UNITY_REVERSED_Z)
+                o.pos.z = max(o.pos.z, 1e-6 * o.pos.w);
+            #else
+                o.pos.z = min(o.pos.z, 0.999999 * o.pos.w);
+            #endif
                 return o;
             }
 

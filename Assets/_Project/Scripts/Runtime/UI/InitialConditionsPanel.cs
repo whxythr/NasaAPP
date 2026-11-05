@@ -16,6 +16,8 @@ namespace SpaceSim.Runtime
         PlanetRuntime planet;
         FlightStateController state;
         bool open;
+
+        public bool IsOpen => open;
         Rect window = new Rect(390, 120, 380, 380);
 
         string lat = "", lon = "", alt = "0", vEast = "0", vNorth = "0", vUp = "0";
@@ -40,7 +42,7 @@ namespace SpaceSim.Runtime
 
         void OnGUI()
         {
-            if (!open || body == null) return;
+            if (!open || body == null || FlightInput.PauseMenuOpen) return;
             HudStyle.Begin();
             window = GUILayout.Window(GetInstanceID(), window, Draw, "Начальные условия (тестовый инструмент)");
         }

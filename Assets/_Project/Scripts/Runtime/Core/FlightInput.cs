@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 #if ENABLE_INPUT_SYSTEM && SPACESIM_INPUT_SYSTEM
 using UnityEngine.InputSystem;
@@ -5,16 +7,20 @@ using UnityEngine.InputSystem;
 
 namespace SpaceSim.Runtime
 {
+    /// <summary>
+    /// Logical game commands, named after their default key. The physical key that triggers each one is a player setting
+    /// (<see cref="GameSettings.GetBinding"/>); Escape is reserved for closing windows and the pause menu.
+    /// </summary>
     public enum InputKey
     {
         M, I, U, O, R, H, P, C, F, G, J, N, Comma, Period, Tab, Escape, Equals, Minus, F1,
-        W, A, S, D, Z, X, Space, LeftShift, LeftCtrl, Return
+        W, A, S, D, Z, X, Space, LeftShift, LeftCtrl, Return, B, K, L, E, V
     }
 
     /// <summary>
     /// Thin input facade. Uses the Input System package when it is installed and enabled
     /// (Project Settings → Player → Active Input Handling), otherwise the legacy Input Manager,
-    /// so the prototype runs with either setting.
+    /// so the prototype runs with either setting. Commands go through the player's key bindings and mouse settings.
     /// </summary>
     public static class FlightInput
     {
@@ -22,31 +28,68 @@ namespace SpaceSim.Runtime
         static Vector2 lastMouse;
         static Vector2 mouseDelta;
 
-        /// <summary>True while an IMGUI text field has keyboard focus (hotkeys are suppressed).</summary>
-        public static bool IsTyping => GUIUtility.keyboardControl != 0;
+        /// <summary>Set while a modal window (e.g. the hangar) owns the input: camera and flight hotkeys pause.</summary>
+        public static bool ModalWindowOpen { get; set; }
 
-        public static bool GetKeyDown(InputKey key)
+        /// <summary>Set while the Esc menu (settings) is open: the HUD hides and every flight hotkey pauses.</summary>
+        public static bool PauseMenuOpen { get; set; }
+
+        /// <summary>True while an IMGUI text field has keyboard focus or a modal window is open (hotkeys are suppressed).</summary>
+        public static bool IsTyping => GUIUtility.keyboardControl != 0 || ModalWindowOpen || PauseMenuOpen;
+
+        /// <summary>The command's key went down this frame (through the player's bindings).</summary>
+        public static bool GetKeyDown(InputKey key) => KeyDown(GameSettings.GetBinding(key));
+
+        /// <summary>The command's key is held (through the player's bindings).</summary>
+        public static bool GetKey(InputKey key) => KeyHeld(GameSettings.GetBinding(key));
+
+        /// <summary>Esc went down this frame (never rebound).</summary>
+        public static bool EscapePressed => KeyDown(KeyCode.Escape);
+
+        /// <summary>Name of the key bound to a command, for hints and buttons ("B", "Пробел").</summary>
+        public static string KeyLabel(InputKey key) => KeyBindings.DisplayName(GameSettings.GetBinding(key));
+
+        /// <summary>A physical key went down this frame.</summary>
+        public static bool KeyDown(KeyCode code)
         {
+            if (code == KeyCode.None) return false;
 #if ENABLE_INPUT_SYSTEM && SPACESIM_INPUT_SYSTEM
             var kb = Keyboard.current;
-            return kb != null && kb[ToKey(key)].wasPressedThisFrame;
+            Key k = ToKey(code);
+            return kb != null && k != Key.None && kb[k].wasPressedThisFrame;
 #elif ENABLE_LEGACY_INPUT_MANAGER
-            return Input.GetKeyDown(ToKeyCode(key));
+            return Input.GetKeyDown(code);
 #else
             return false;
 #endif
         }
 
-        public static bool GetKey(InputKey key)
+        /// <summary>A physical key is held.</summary>
+        public static bool KeyHeld(KeyCode code)
         {
+            if (code == KeyCode.None) return false;
 #if ENABLE_INPUT_SYSTEM && SPACESIM_INPUT_SYSTEM
             var kb = Keyboard.current;
-            return kb != null && kb[ToKey(key)].isPressed;
+            Key k = ToKey(code);
+            return kb != null && k != Key.None && kb[k].isPressed;
 #elif ENABLE_LEGACY_INPUT_MANAGER
-            return Input.GetKey(ToKeyCode(key));
+            return Input.GetKey(code);
 #else
             return false;
 #endif
+        }
+
+        /// <summary>The first assignable key pressed this frame (used by "press a key" in Settings).</summary>
+        public static bool TryGetPressedKey(out KeyCode code)
+        {
+            foreach (KeyCode c in KeyBindings.Assignable)
+            {
+                if (!KeyDown(c)) continue;
+                code = c;
+                return true;
+            }
+            code = KeyCode.None;
+            return false;
         }
 
         public static bool RightMouseHeld
@@ -97,6 +140,12 @@ namespace SpaceSim.Runtime
             }
         }
 
+        /// <summary>Mouse movement for looking around: <see cref="MouseDelta"/> × sensitivity, Y inverted if the player chose so.</summary>
+        public static Vector2 LookDelta => ApplyLookSettings(MouseDelta, GameSettings.MouseSensitivity, GameSettings.InvertMouseY);
+
+        public static Vector2 ApplyLookSettings(Vector2 delta, float sensitivity, bool invertY) =>
+            new Vector2(delta.x * sensitivity, (invertY ? -delta.y : delta.y) * sensitivity);
+
         /// <summary>Scroll in wheel notches (+ = away from the user).</summary>
         public static float ScrollNotches
         {
@@ -117,79 +166,40 @@ namespace SpaceSim.Runtime
         }
 
 #if ENABLE_INPUT_SYSTEM && SPACESIM_INPUT_SYSTEM
-        static Key ToKey(InputKey k)
+        static readonly Dictionary<KeyCode, Key> keyMap = new Dictionary<KeyCode, Key>();
+
+        /// <summary>Legacy <see cref="KeyCode"/> → Input System <see cref="Key"/> (same names except the cases below).</summary>
+        static Key ToKey(KeyCode code)
         {
-            switch (k)
+            if (keyMap.TryGetValue(code, out Key cached)) return cached;
+            Key k;
+            // By name, not by offset: in Key the digits run 1…9, 0.
+            if (code >= KeyCode.Alpha0 && code <= KeyCode.Alpha9)
+                k = Enum.TryParse("Digit" + (int)(code - KeyCode.Alpha0), out Key digit) ? digit : Key.None;
+            else if (code >= KeyCode.Keypad0 && code <= KeyCode.Keypad9)
+                k = Enum.TryParse("Numpad" + (int)(code - KeyCode.Keypad0), out Key pad) ? pad : Key.None;
+            else
             {
-                case InputKey.M: return Key.M;
-                case InputKey.I: return Key.I;
-                case InputKey.U: return Key.U;
-                case InputKey.O: return Key.O;
-                case InputKey.R: return Key.R;
-                case InputKey.H: return Key.H;
-                case InputKey.P: return Key.P;
-                case InputKey.C: return Key.C;
-                case InputKey.F: return Key.F;
-                case InputKey.G: return Key.G;
-                case InputKey.J: return Key.J;
-                case InputKey.N: return Key.N;
-                case InputKey.W: return Key.W;
-                case InputKey.A: return Key.A;
-                case InputKey.S: return Key.S;
-                case InputKey.D: return Key.D;
-                case InputKey.Z: return Key.Z;
-                case InputKey.X: return Key.X;
-                case InputKey.Space: return Key.Space;
-                case InputKey.LeftShift: return Key.LeftShift;
-                case InputKey.LeftCtrl: return Key.LeftCtrl;
-                case InputKey.Return: return Key.Enter;
-                case InputKey.Comma: return Key.Comma;
-                case InputKey.Period: return Key.Period;
-                case InputKey.Tab: return Key.Tab;
-                case InputKey.Escape: return Key.Escape;
-                case InputKey.Equals: return Key.Equals;
-                case InputKey.Minus: return Key.Minus;
-                case InputKey.F1: return Key.F1;
-                default: return Key.None;
+                switch (code)
+                {
+                    case KeyCode.Return: k = Key.Enter; break;
+                    case KeyCode.LeftControl: k = Key.LeftCtrl; break;
+                    case KeyCode.RightControl: k = Key.RightCtrl; break;
+                    case KeyCode.BackQuote: k = Key.Backquote; break;
+                    case KeyCode.KeypadPlus: k = Key.NumpadPlus; break;
+                    case KeyCode.KeypadMinus: k = Key.NumpadMinus; break;
+                    case KeyCode.KeypadMultiply: k = Key.NumpadMultiply; break;
+                    case KeyCode.KeypadDivide: k = Key.NumpadDivide; break;
+                    case KeyCode.KeypadEnter: k = Key.NumpadEnter; break;
+                    case KeyCode.KeypadPeriod: k = Key.NumpadPeriod; break;
+                    default:
+                        if (!Enum.TryParse(code.ToString(), out k)) k = Key.None;
+                        break;
+                }
             }
+            keyMap[code] = k;
+            return k;
         }
 #endif
-
-        static KeyCode ToKeyCode(InputKey k)
-        {
-            switch (k)
-            {
-                case InputKey.M: return KeyCode.M;
-                case InputKey.I: return KeyCode.I;
-                case InputKey.U: return KeyCode.U;
-                case InputKey.O: return KeyCode.O;
-                case InputKey.R: return KeyCode.R;
-                case InputKey.H: return KeyCode.H;
-                case InputKey.P: return KeyCode.P;
-                case InputKey.C: return KeyCode.C;
-                case InputKey.F: return KeyCode.F;
-                case InputKey.G: return KeyCode.G;
-                case InputKey.J: return KeyCode.J;
-                case InputKey.N: return KeyCode.N;
-                case InputKey.W: return KeyCode.W;
-                case InputKey.A: return KeyCode.A;
-                case InputKey.S: return KeyCode.S;
-                case InputKey.D: return KeyCode.D;
-                case InputKey.Z: return KeyCode.Z;
-                case InputKey.X: return KeyCode.X;
-                case InputKey.Space: return KeyCode.Space;
-                case InputKey.LeftShift: return KeyCode.LeftShift;
-                case InputKey.LeftCtrl: return KeyCode.LeftControl;
-                case InputKey.Return: return KeyCode.Return;
-                case InputKey.Comma: return KeyCode.Comma;
-                case InputKey.Period: return KeyCode.Period;
-                case InputKey.Tab: return KeyCode.Tab;
-                case InputKey.Escape: return KeyCode.Escape;
-                case InputKey.Equals: return KeyCode.Equals;
-                case InputKey.Minus: return KeyCode.Minus;
-                case InputKey.F1: return KeyCode.F1;
-                default: return KeyCode.None;
-            }
-        }
     }
 }

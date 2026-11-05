@@ -125,9 +125,21 @@ namespace SpaceSim.Flight
             {
                 if (!IsBurning) return 0.0;
                 RocketStage s = CurrentStage;
-                return throttle * s.vacuumThrust / (s.vacuumIsp * PhysicalConstants.StandardGravity);
+                return throttle * RocketEquations.MassFlow(s.vacuumThrust, s.vacuumIsp);
             }
         }
+
+        /// <summary>Mass flow at full throttle of the current stage, whether or not the engine is running [kg/s].</summary>
+        public double FullThrottleMassFlow => HasStages && CurrentStage.vacuumIsp > 0.0
+            ? RocketEquations.MassFlow(CurrentStage.vacuumThrust, CurrentStage.vacuumIsp)
+            : 0.0;
+
+        /// <summary>
+        /// Thrust-to-weight ratio of the current stage at full throttle, at ambient pressure ratio p/p₀ and local gravity g —
+        /// meaningful also while the engine is off (what the rocket COULD do).
+        /// </summary>
+        public double AvailableThrustToWeight(double pressureRatio, double localGravity) =>
+            RocketEquations.ThrustToWeight(RocketEquations.ThrustFromMassFlow(FullThrottleMassFlow, Isp(pressureRatio)), Mass, localGravity);
 
         /// <summary>Specific impulse at ambient pressure ratio p/p₀ (0 = vacuum) [s].</summary>
         public double Isp(double pressureRatio)
@@ -138,15 +150,18 @@ namespace SpaceSim.Flight
         }
 
         /// <summary>Thrust [N] at ambient pressure ratio p/p₀.</summary>
-        public double Thrust(double pressureRatio) => MassFlow * PhysicalConstants.StandardGravity * Isp(pressureRatio);
+        public double Thrust(double pressureRatio) => RocketEquations.ThrustFromMassFlow(MassFlow, Isp(pressureRatio));
 
         /// <summary>Burns propellant for dt seconds. Flames out (engine off) when the stage is empty.</summary>
         public void Burn(double dt)
         {
             double mdot = MassFlow;
             if (mdot <= 0.0) return;
-            Propellant[StageIndex] = Math.Max(0.0, Propellant[StageIndex] - mdot * dt);
-            if (Propellant[StageIndex] <= 0.0) EngineOn = false;
+            double left = Propellant[StageIndex] - mdot * dt;
+            // Treat a rounding residue (< 1 mg) as empty, otherwise the engine would stay "on" for one more tick.
+            if (left < 1e-6) left = 0.0;
+            Propellant[StageIndex] = left;
+            if (left <= 0.0) EngineOn = false;
         }
 
         /// <summary>Drops the current stage. Returns false if only the payload is left.</summary>
@@ -167,7 +182,7 @@ namespace SpaceSim.Flight
                 for (int j = i + 1; j < config.stages.Length; j++) above += config.stages[j].dryMass + Propellant[j];
                 double m0 = above + config.stages[i].dryMass + Propellant[i];
                 double m1 = above + config.stages[i].dryMass;
-                dv += config.stages[i].vacuumIsp * PhysicalConstants.StandardGravity * Math.Log(m0 / m1);
+                if (config.stages[i].vacuumIsp > 0.0 && m1 > 0.0) dv += RocketEquations.DeltaV(config.stages[i].vacuumIsp, m0, m1);
             }
             return dv;
         }

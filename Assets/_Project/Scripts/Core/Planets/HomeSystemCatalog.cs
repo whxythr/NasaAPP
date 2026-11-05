@@ -21,6 +21,8 @@ namespace SpaceSim.Planets
         public OrbitProperties Orbit;
         public double LaunchLatitude;
         public double LaunchLongitude;
+        /// <summary>Radiation / acid danger levels (see HazardModel).</summary>
+        public EnvironmentHazards Hazards = new EnvironmentHazards();
     }
 
     /// <summary>
@@ -80,6 +82,7 @@ namespace SpaceSim.Planets
             {
                 hasAtmosphere = true,
                 surfacePressure = 101325.0,        // Earth-like (not given)
+                composition = "N₂ ≈ 78 %, O₂ ≈ 21 %, Ar ≈ 1 % — как у Земли (допущение: состав не задан)",
                 surfaceTemperature = 295.45,       // 22.3 °C
                 meanMolarMass = 0.0289644,
                 coRotationFactor = 1.0
@@ -121,7 +124,8 @@ namespace SpaceSim.Planets
                 Description = "Обитаемая стартовая планета: копия Земли с меньшей массой (0.842 M⊕) и g = 8.27 м/с². Фиолетовая вода (свет звезды K-класса), экваториальные пустыни, горы у экваториальных побережий, на полюсах до −49 °C. Сплюснутость 0.286 %, наклон оси 22.5°, магнитный полюс 11.5°, B = 0.254 Гс, магнитопауза 13 627 603 м. Сутки 0.844 земных, год 124 дня.",
                 Physical = p, Generation = g, Optics = new AtmosphereOpticalProperties(),
                 Orbit = new OrbitProperties { semiMajorAxis = 0.67 * AU, period = 124.0 * Day, meanAnomalyAtEpochDegrees = orbitAngle },
-                LaunchLatitude = padLat, LaunchLongitude = padLon
+                LaunchLatitude = padLat, LaunchLongitude = padLon,
+                Hazards = new EnvironmentHazards() // magnetosphere + atmosphere: safe
             };
         }
 
@@ -144,7 +148,7 @@ namespace SpaceSim.Planets
                 axialTiltDegrees = 0.6,
                 rotationPhaseAtEpochDegrees = PhaseForLocalTime(orbitAngle, padLon, StartHour),
                 spaceBoundaryAltitude = 50000.0,
-                atmosphere = new AtmosphereProperties { hasAtmosphere = false, surfaceDensity = 0.0, surfacePressure = 0.0, surfaceTemperature = 451.15 }
+                atmosphere = new AtmosphereProperties { hasAtmosphere = false, surfaceDensity = 0.0, surfacePressure = 0.0, surfaceTemperature = 451.15, composition = "нет атмосферы" }
             };
             p.measuredGravitationalParameter = p.GravitationalParameter;
             var g = new PlanetGenerationSettings
@@ -168,7 +172,8 @@ namespace SpaceSim.Planets
                 Description = "Ближайшая к звезде. Без атмосферы, силикатная серо-коричневая кора, железное ядро (ρ = 4350 кг/м³), кратеры и небольшие «моря», тектонически активна. Сутки = 54.1 земных.",
                 Physical = p, Generation = g, Optics = new AtmosphereOpticalProperties(),
                 Orbit = new OrbitProperties { semiMajorAxis = 0.0883 * AU, period = 5.94 * Day, meanAnomalyAtEpochDegrees = orbitAngle },
-                LaunchLatitude = padLat, LaunchLongitude = padLon
+                LaunchLatitude = padLat, LaunchLongitude = padLon,
+                Hazards = new EnvironmentHazards { radiationLevel = 2 } // closest to the star, no air, no magnetosphere
             };
         }
 
@@ -182,6 +187,7 @@ namespace SpaceSim.Planets
             {
                 hasAtmosphere = true,
                 surfacePressure = 100.0,           // very thin O₂ layer
+                composition = "очень тонкий слой O₂",
                 surfaceTemperature = 452.15,       // mean of −3 °C … 361 °C
                 meanMolarMass = 0.032,
                 coRotationFactor = 1.0
@@ -235,7 +241,8 @@ namespace SpaceSim.Planets
                 Description = "Самая малая планета. Приливный захват: всегда повёрнута одной стороной к звезде (−3 °C … 361 °C). Очень тонкий кислородный слой, ржавые красные пятна, массивные глубокие кратеры и «сердечко».",
                 Physical = p, Generation = g, Optics = optics,
                 Orbit = new OrbitProperties { semiMajorAxis = 0.128 * AU, period = 10.4 * Day, meanAnomalyAtEpochDegrees = orbitAngle, tidallyLocked = true },
-                LaunchLatitude = padLat, LaunchLongitude = padLon
+                LaunchLatitude = padLat, LaunchLongitude = padLon,
+                Hazards = new EnvironmentHazards { radiationLevel = 1 }
             };
         }
 
@@ -246,6 +253,7 @@ namespace SpaceSim.Planets
             {
                 hasAtmosphere = true,
                 surfacePressure = 7.5e6,           // lethal, Venus-like
+                composition = "SO₂ и CO₂ с примесью O₂ и Ar; сернокислотные облака",
                 surfaceTemperature = 573.15,       // 300 °C
                 meanMolarMass = 0.052,             // SO₂ + CO₂ with some O₂ and Ar
                 coRotationFactor = 1.0
@@ -293,7 +301,8 @@ namespace SpaceSim.Planets
                 Description = "300 °C, смертельное давление, сернокислотные осадки, атмосфера из SO₂ и CO₂ с примесью O₂ и Ar. Голубая органическая дымка над атмосферой, бело-голубые закаты. g ≈ 14.5 м/с². Сутки = 4.65 земных. Один несферический спутник на 30 000 км.",
                 Physical = p, Generation = g, Optics = optics,
                 Orbit = new OrbitProperties { semiMajorAxis = 0.427 * AU, period = 63.1 * Day, meanAnomalyAtEpochDegrees = orbitAngle },
-                LaunchLatitude = padLat, LaunchLongitude = padLon
+                LaunchLatitude = padLat, LaunchLongitude = padLon,
+                Hazards = new EnvironmentHazards { radiationLevel = 1, acidLevel = 1 } // sulphuric acid rain inside the air
             };
         }
 
@@ -311,7 +320,7 @@ namespace SpaceSim.Planets
                 rotationPhaseAtEpochDegrees = orbitAngle + 180.0,
                 axialTiltDegrees = 0.0,
                 spaceBoundaryAltitude = 5000.0,
-                atmosphere = new AtmosphereProperties { hasAtmosphere = false, surfaceDensity = 0.0, surfacePressure = 0.0 }
+                atmosphere = new AtmosphereProperties { hasAtmosphere = false, surfaceDensity = 0.0, surfacePressure = 0.0, composition = "нет атмосферы" }
             };
             p.measuredGravitationalParameter = p.GravitationalParameter;
             // Non-spherical: relief amplitudes of ~15 % of the radius at low frequency make a potato-shaped body.
@@ -335,7 +344,8 @@ namespace SpaceSim.Planets
                 Description = "Несферический спутник Гермеус Моры на расстоянии 30 000 км, приливно захвачен. Радиус ≈ 120 км (параметры не заданы — оценка).",
                 Physical = p, Generation = g, Optics = new AtmosphereOpticalProperties(),
                 Orbit = orbit,
-                LaunchLatitude = 0.0, LaunchLongitude = 90.0
+                LaunchLatitude = 0.0, LaunchLongitude = 90.0,
+                Hazards = new EnvironmentHazards { radiationLevel = 1 }
             };
         }
     }

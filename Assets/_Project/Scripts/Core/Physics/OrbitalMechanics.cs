@@ -65,6 +65,18 @@ namespace SpaceSim.Physics
             Math.Sqrt(mu * (2.0 / r - 1.0 / semiMajorAxis));
 
         /// <summary>
+        /// Orbital insertion: prograde Δv [m/s] at apoapsis r_a that makes a trajectory with periapsis r_p circular at r_a:
+        /// v_circ(r_a) − v(r_a) on the ellipse a = (r_a + r_p)/2. Impulsive burn, two-body.
+        /// </summary>
+        public static double CircularizationDeltaV(double mu, double apoapsisRadius, double periapsisRadius)
+        {
+            if (!(mu > 0.0) || !(apoapsisRadius > 0.0) || !(periapsisRadius > 0.0)) throw new ArgumentOutOfRangeException(nameof(apoapsisRadius));
+            if (periapsisRadius > apoapsisRadius) throw new ArgumentException("Periapsis cannot be above apoapsis.");
+            double a = 0.5 * (apoapsisRadius + periapsisRadius);
+            return CircularVelocity(mu, apoapsisRadius) - VisVivaSpeed(mu, apoapsisRadius, a);
+        }
+
+        /// <summary>
         /// Osculating elements. <paramref name="referenceAxis"/> (unit) defines the equatorial plane for inclination.
         /// Periapsis is computed as p/(1+e) with p = h²/μ, which stays well-conditioned for all conic types.
         /// </summary>

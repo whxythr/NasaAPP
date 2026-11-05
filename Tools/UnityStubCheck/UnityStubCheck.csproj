@@ -16,6 +16,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="UnityEngineStubs.cs" />
+    <Compile Include="UnityUIElementsStubs.cs" />
     <Compile Include="../../Assets/_Project/Scripts/Runtime/**/*.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Unity/**/*.cs" />
     <Compile Include="../../Assets/_Project/Tests/PlayMode/**/*.cs" />

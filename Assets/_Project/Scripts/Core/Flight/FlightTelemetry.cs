@@ -93,7 +93,7 @@ namespace SpaceSim.Flight
             t.VelocityNorth = Vector3d.Dot(fixedVelRel, north);
             t.VelocityUp = Vector3d.Dot(fixedVelRel, fixedDir);
 
-            t.GravityAcceleration = sim.Gravity.AccelerationAt(s.Position);
+            t.GravityAcceleration = sim.GravityAcceleration(s.Time, s.Position);
             t.GravityMagnitude = t.GravityAcceleration.Magnitude;
             if (sim.IsLanded)
             {

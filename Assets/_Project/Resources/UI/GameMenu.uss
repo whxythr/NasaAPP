@@ -1,0 +1,62 @@
+/* ─────────────── HORIZON · in-game Esc menu and live Settings ───────────────
+   Extends MainMenu.uss (same palette and classes); loaded after it.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* ── overlay over the 3D view ── */
+.game-menu {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    background-color: rgba(3, 5, 10, 0.70);
+    color: rgb(232, 238, 246);
+    font-size: 18px;
+    opacity: 0;
+    transition-property: opacity; transition-duration: 0.2s;
+}
+.game-menu--open { opacity: 1; }
+.game-menu__shade { position: absolute; left: 0; top: 0; bottom: 0; width: 1240px; -unity-background-scale-mode: stretch-to-fill; }
+.game-menu__actions { margin-top: 18px; }
+.game-menu__actions .btn { margin-top: 10px; }
+.game-menu__note { font-size: 14px; color: rgb(110, 124, 146); white-space: normal; margin-top: 12px; }
+.status-dot--amber { background-color: rgb(255, 181, 71); }
+
+/* ── interactive tabs ── */
+.tab--live:hover { color: rgb(232, 238, 246); }
+.tab--live:focus { color: rgb(255, 255, 255); }
+
+/* ── settings rows ── */
+.settings-list--fill { align-self: stretch; padding: 0; }
+.setting--live:hover { background-color: rgba(127, 212, 255, 0.04); }
+.setting--bind { height: 50px; }
+.setting--bind .setting__label { font-size: 17px; }
+.setting--listening {
+    background-color: rgba(255, 181, 71, 0.08);
+    border-left-width: 3px; border-left-color: rgb(255, 181, 71); padding-left: 27px;
+}
+.bind-group { font-size: 12px; letter-spacing: 4px; color: rgb(110, 124, 146); margin: 22px 30px 6px 30px; }
+.bind-key {
+    min-width: 160px; height: 32px; padding: 0 14px;
+    -unity-text-align: middle-center; font-size: 14px; letter-spacing: 2px; color: rgb(232, 238, 246);
+    border-width: 1px; border-color: rgba(232, 238, 246, 0.35); border-radius: 3px;
+    background-color: rgba(255, 255, 255, 0.03);
+    transition-property: background-color, border-color; transition-duration: 0.15s;
+}
+.setting--bind:hover .bind-key { border-color: rgb(127, 212, 255); }
+.bind-key--custom { color: rgb(127, 212, 255); border-color: rgba(127, 212, 255, 0.6); }
+.bind-key--listening { color: rgb(16, 12, 6); background-color: rgb(255, 181, 71); border-color: rgb(255, 181, 71); }
+
+/* ── live slider ── */
+.slider--live { height: 34px; }
+.slider--live .slider__track { margin-right: 18px; }
+.slider__knob { transition-property: scale, background-color; transition-duration: 0.12s; }
+.slider--live:hover .slider__knob { background-color: rgb(127, 212, 255); }
+.slider--drag .slider__knob { background-color: rgb(127, 212, 255); scale: 1.2 1.2; }
+
+/* ── manual scroll area (the runtime panel has no default theme for ScrollView) ── */
+.scroll-viewport { flex-grow: 1; overflow: hidden; }
+.scroll-content { position: absolute; left: 0; right: 0; top: 0; padding-bottom: 14px; }
+.scroll-bar { position: absolute; right: 8px; top: 12px; bottom: 12px; width: 4px; border-radius: 2px; background-color: rgba(255, 255, 255, 0.05); }
+.scroll-bar__thumb { position: absolute; left: 0; right: 0; border-radius: 2px; background-color: rgba(150, 190, 255, 0.45); }
+
+/* ── status line under the explanation ── */
+.settings-status { font-size: 15px; color: rgb(127, 212, 255); white-space: normal; margin-top: 14px; }
+.settings-status--active { color: rgb(255, 181, 71); }

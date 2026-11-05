@@ -53,6 +53,8 @@ namespace SpaceSim.Physics
         public double coRotationFactor = 1.0;
         /// <summary>Used when <see cref="profile"/> is Tabulated. Must be sorted by altitude.</summary>
         public AtmosphereTablePoint[] table = new AtmosphereTablePoint[0];
+        /// <summary>Gas composition (informational, shown in navigation; physics uses <see cref="meanMolarMass"/>).</summary>
+        public string composition = "";
 
         public AtmosphereProperties Clone()
         {

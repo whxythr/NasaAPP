@@ -17,6 +17,12 @@ namespace SpaceSim.Runtime
     [DefaultExecutionOrder(-50)]
     public sealed class SpaceCameraController : MonoBehaviour
     {
+        /// <summary>A first-person view supplied by someone else (the astronaut on foot). Simulation-frame vectors at render time.</summary>
+        public interface IFirstPersonView
+        {
+            void GetView(double renderTime, out Vector3d eye, out Vector3d forward, out Vector3d up);
+        }
+
         public enum ReferenceFrame { LocalHorizon, Inertial }
         public enum FocusTarget { FlightBody, Planet }
 
@@ -53,6 +59,8 @@ namespace SpaceSim.Runtime
         public FocusTarget Focus => focus;
         public Vector3d SimulationPosition { get; private set; }
         public double Distance => distance;
+        /// <summary>When set, the camera looks through these eyes instead of orbiting the vehicle.</summary>
+        public IFirstPersonView FirstPerson { get; set; }
 
         public void Initialize(Camera camera, PlanetRuntime planetRuntime, FlightBody flightBody, FloatingOrigin floatingOrigin, SimulationController sim)
         {
@@ -100,6 +108,16 @@ namespace SpaceSim.Runtime
         void LateUpdate()
         {
             if (planet == null || planet.Model == null || body == null || body.Simulation == null) return;
+            if (FirstPerson != null)
+            {
+                FirstPerson.GetView(simulation.RenderTime, out Vector3d eye, out Vector3d look, out Vector3d upFp);
+                SimulationPosition = eye;
+                origin.SetViewer(eye);
+                transform.SetPositionAndRotation(origin.ToUnityPosition(eye),
+                    Quaternion.LookRotation(CoordinateSystem.ToUnityVector(look), CoordinateSystem.ToUnityVector(upFp)));
+                UpdateClipPlanes(eye, 1.6, 1.0);
+                return;
+            }
             float dt = Mathf.Max(Time.unscaledDeltaTime, 1e-4f);
             HandleInput();
 
@@ -142,7 +160,7 @@ namespace SpaceSim.Runtime
             if (FlightInput.IsTyping) return;
             if (FlightInput.RightMouseHeld || FlightInput.MiddleMouseHeld)
             {
-                Vector2 d = FlightInput.MouseDelta;
+                Vector2 d = FlightInput.LookDelta; // x player sensitivity, optional inverted Y
                 targetYaw += d.x * mouseSensitivity;
                 targetPitch = Mathf.Clamp(targetPitch - d.y * mouseSensitivity, -89f, 89f);
             }
@@ -179,15 +197,35 @@ namespace SpaceSim.Runtime
             }
         }
 
+        /// <summary>
+        /// Far plane low over the ground [m]. URP's main-light shadow cascades fail when the far plane is several thousand
+        /// kilometres away (measured: shadows at 1 000 km, none at 3 000 km), so near the surface — where shadows matter —
+        /// the far plane only reaches past the horizon. The sky shell, the stars and the Sun are clamped to the far plane in
+        /// their shaders, and other bodies are drawn in scaled space inside it (<see cref="StarSystemRuntime"/>).
+        /// </summary>
+        public const double ShadowSafeFar = 9.0e5;
+
         void UpdateClipPlanes(Vector3d camPos, double altitude, double focusDistance)
         {
             var model = planet.Model;
             double r = (camPos - model.Position).Magnitude;
             double far = r + model.Radius + planet.VisualShellHeight + 1000.0;
+            // Line of sight to the horizon plus the highest peaks rising behind it.
+            double h = Math.Max(0.0, altitude), mountains = Math.Max(0.0, model.Surface.MaxSurfaceHeight);
+            double horizon = Math.Sqrt(2.0 * model.Radius * h + h * h) + Math.Sqrt(2.0 * model.Radius * mountains + mountains * mountains);
+            if (horizon * 1.1 < ShadowSafeFar) far = Math.Min(far, ShadowSafeFar);
             double near = MathD.Clamp(altitude * 0.002, 0.05, 2000.0);
             near = Math.Min(near, Math.Max(0.05, focusDistance * 0.25));
+            if (DebugClipOverride.x > 0f)
+            {
+                near = DebugClipOverride.x;
+                far = DebugClipOverride.y;
+            }
             cam.nearClipPlane = (float)near;
             cam.farClipPlane = (float)Math.Max(far, near * 10.0);
         }
+
+        /// <summary>Diagnostics only: fixed near/far planes (x = 0 — automatic).</summary>
+        public Vector2 DebugClipOverride { get; set; }
     }
 }

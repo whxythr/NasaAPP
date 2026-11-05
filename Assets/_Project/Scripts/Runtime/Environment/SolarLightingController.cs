@@ -109,7 +109,7 @@ namespace SpaceSim.Runtime
             double rho0 = model.Atmosphere.ReferenceDensity;
             double column = rho0 > 0.0 ? model.Atmosphere.Density(viewerRel.Magnitude - model.Radius) / rho0 : 0.0;
             float day = Mathf.Clamp01((float)SunElevationSineAtViewer * 2.5f + 0.25f) * (float)Math.Min(1.0, column);
-            RenderSettings.ambientLight = ambientFloor + system.SkyAmbient * day;
+            RenderSettings.ambientLight = ambientFloor + system.SkyAmbientFor(planet) * day;
 
             if (diskMaterial != null)
             {

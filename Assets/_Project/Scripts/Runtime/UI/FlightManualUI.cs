@@ -26,7 +26,7 @@ namespace SpaceSim.Runtime
 
         void OnGUI()
         {
-            if (!open || planet == null || planet.Model == null) return;
+            if (!open || planet == null || planet.Model == null || FlightInput.PauseMenuOpen) return;
             if (sections == null || !ReferenceEquals(sectionsBuiltFor, planet.Model))
             {
                 sections = FlightManualContent.Build(planet.Model, planet.Definition.launchSite.latitudeDegrees);
@@ -37,12 +37,12 @@ namespace SpaceSim.Runtime
             HudStyle.Begin();
             Vector2 screen = HudStyle.VirtualScreen;
             var r = new Rect(screen.x * 0.5f - 520, 70, 1040, screen.y - 140);
-            GUI.Box(r, GUIContent.none, HudStyle.Panel);
+            HudStyle.WindowFrame(r, dimBehind: false);
             GUILayout.BeginArea(new Rect(r.x + 10, r.y + 8, r.width - 20, r.height - 16));
             GUILayout.BeginHorizontal();
-            GUILayout.Label("FLIGHT MANUAL · " + planet.Definition.displayName, HudStyle.Title);
+            GUILayout.Label("FLIGHT MANUAL · " + planet.Definition.displayName, HudStyle.WindowTitle);
             GUILayout.FlexibleSpace();
-            if (GUILayout.Button("Закрыть (M)", HudStyle.Button, GUILayout.Width(110))) open = false;
+            if (GUILayout.Button("Закрыть (" + FlightInput.KeyLabel(InputKey.M) + " · Esc)", HudStyle.Button, GUILayout.Width(150), GUILayout.Height(28))) open = false;
             GUILayout.EndHorizontal();
             GUILayout.Space(6);
 
@@ -50,7 +50,7 @@ namespace SpaceSim.Runtime
             listScroll = GUILayout.BeginScrollView(listScroll, GUILayout.Width(260));
             for (int i = 0; i < sections.Count; i++)
             {
-                bool on = GUILayout.Toggle(i == selected, sections[i].Title, HudStyle.Button);
+                bool on = GUILayout.Toggle(i == selected, sections[i].Title, HudStyle.ListButton);
                 if (on && i != selected)
                 {
                     selected = i;

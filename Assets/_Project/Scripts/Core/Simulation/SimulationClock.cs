@@ -68,6 +68,18 @@ namespace SpaceSim.Simulation
         }
 
         /// <summary>
+        /// Jumps <paramref name="steps"/> whole fixed steps at once (analytic coasting at high time warp): the caller advances
+        /// its bodies by steps·<see cref="FixedStep"/> itself. The time base stays the integer step counter.
+        /// </summary>
+        public void AdvanceSteps(long steps)
+        {
+            if (steps <= 0) return;
+            stepCount += steps;
+            accumulator = 0.0;
+            WasThrottled = false;
+        }
+
+        /// <summary>
         /// Advances the clock by one rendered frame. Invokes <paramref name="step"/> (time, dt) for every
         /// whole physics step that fits in the accumulated time. Returns the number of steps executed.
         /// </summary>

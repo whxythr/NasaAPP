@@ -18,6 +18,6 @@
 .idea/
 
 # Out-of-Unity core test harness
-/Tools/CoreTests/**/bin/
-/Tools/CoreTests/**/obj/
+/Tools/**/bin/
+/Tools/**/obj/
 /Tools/CoreTests/TestResults/
